@@ -14,29 +14,37 @@
         
         <div id="screen-connection">
             <h2>1. Connect Teams</h2>
-            <div id="host-controls">
+            
+            <div id="host-section">
                 <button id="host-btn" class="btn-full">Create Room (Home Team)</button>
-                <p>Room ID: <strong id="room-id">...</strong></p>
+                <div id="host-info" class="hidden">
+                    <p>Room ID:</p>
+                    <div class="room-code-display"><strong id="room-id">Generating...</strong></div>
+                    <p class="small-text">Share this code with the Away Team</p>
+                </div>
             </div>
-            <div id="client-controls">
-                <p>Enter Room ID:</p>
-                <input type="text" id="join-id-input" placeholder="Enter Room ID">
+
+            <div id="join-section">
+                <hr>
+                <p><strong>OR</strong></p>
+                <input type="text" id="join-id-input" placeholder="Enter Room ID here">
                 <button id="join-btn" class="btn-full">Join Room (Away Team)</button>
             </div>
-            <p id="conn-status">Waiting...</p>
+
+            <p id="conn-status" class="status-bar">Ready to connect.</p>
         </div>
 
         <div id="screen-roster" class="hidden">
             <h2>2. Team Setup</h2>
             <p>Enter your Team Name.</p>
-            <p class="small-text">Players (P1-P4) are generated automatically.</p>
             
             <div class="input-group">
                 <input type="text" id="my-team-name" placeholder="e.g. Tigers Esports">
             </div>
+            <p class="small-text">Players P1-P4 are generated automatically.</p>
 
             <button id="submit-roster-btn" class="btn-full">Ready Up</button>
-            <p id="roster-status">Waiting for opponent...</p>
+            <p id="roster-status" class="status-bar">Waiting for opponent...</p>
         </div>
 
         <div id="screen-scoreboard" class="hidden">
@@ -75,7 +83,7 @@
 
         <div id="screen-stage-select" class="hidden">
             <h2 id="stage-phase-title">Stage Selection</h2>
-            <p id="instructions">...</p>
+            <p id="instructions" class="highlight-text">...</p>
             
             <div class="stage-list-container">
                 <h3>Starters</h3>
@@ -89,7 +97,8 @@
 
         <div id="screen-report" class="hidden">
             <h2>Report Match Result</h2>
-            <p class="highlight-text">Playing on: <span id="report-stage-name">...</span></p>
+            <p>Playing on: <strong id="report-stage-name">...</strong></p>
+            <hr>
             <p>Who won this game?</p>
             
             <div class="report-buttons">
