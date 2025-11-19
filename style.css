@@ -24,7 +24,9 @@ body {
 h1, h2, h3 { margin: 0.5rem 0; color: #1a1a1a; }
 hr { border: 0; border-top: 1px solid #eee; margin: 15px 0; }
 .hidden { display: none !important; }
-.small-text { font-size: 0.9rem; color: #666; }
+.small-text { font-size: 0.85rem; color: #666; }
+.status-bar { margin-top: 15px; font-weight: bold; color: #555; }
+.highlight-text { color: #007bff; font-weight: 600; min-height: 1.5em; }
 
 /* --- Inputs & Buttons --- */
 input[type="text"] {
@@ -49,9 +51,20 @@ input[type="text"] {
     cursor: pointer;
     margin: 5px 0;
     transition: background 0.2s;
+    -webkit-tap-highlight-color: transparent;
 }
 .btn-full:hover { background-color: #0056b3; }
 .btn-full:disabled { background-color: #ccc; }
+
+.room-code-display {
+    background: #e9ecef;
+    padding: 10px;
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+    border-radius: 6px;
+    margin: 10px 0;
+    user-select: text;
+}
 
 /* --- Scoreboard Styles --- */
 .score-header {
@@ -84,18 +97,18 @@ input[type="text"] {
 .active-player.away { border-color: #ffb3b3; background: #ffe6e6; }
 
 .active-player span { font-weight: bold; display: block; margin-bottom: 5px; font-size: 1.1rem; }
-
 .stock-dots { letter-spacing: 3px; color: #555; font-size: 1.2rem; }
 
 /* --- Stage List --- */
 .stage-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
 .stage-btn {
-    padding: 10px;
+    padding: 12px 5px;
     border: 2px solid #eee;
     background: #fff;
     border-radius: 6px;
     font-weight: 500;
     width: 48%; 
+    font-size: 0.95rem;
 }
 .stage-btn.banned { background: #ffebee; border-color: #ef9a9a; color: #c62828; text-decoration: line-through; opacity: 0.6; }
 .stage-btn.selectable { border-color: #007bff; background: #e6f2ff; cursor: pointer; }
