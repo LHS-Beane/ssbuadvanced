@@ -1,6 +1,6 @@
 /******************************************************
  *  SSBU CREW BATTLE MANAGER — PRO APP VERSION (B)
- *  With full reconnection-safe WebRTC logic
+ *  Fully patched with correct screen names + reconnection fix
  ******************************************************/
 
 /* -----------------------------------------------
@@ -22,7 +22,7 @@ let crewState = {
     home: { name: "Home", players: [], stocks: 12, currentIdx: 0 },
     away: { name: "Away", players: [], stocks: 12, currentIdx: 0 },
     matchNum: 1,
-    phase: "roster",
+    phase: "roster", // VALID SCREENS: connection, roster, scoreboard, stage-select, report, gameover
     previousWinner: null
 };
 
@@ -41,11 +41,16 @@ const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
 /* -----------------------------------------------
-   SCREEN MANAGER
+   SCREEN MANAGER — PATCHED
 --------------------------------------------------*/
 function showScreen(name) {
     $$(".screen").forEach(s => s.classList.remove("active"));
-    $(`[data-screen="${name}"]`).classList.add("active");
+    const target = $(`[data-screen="${name}"]`);
+    if (!target) {
+        console.error("Screen not found:", name);
+        return;
+    }
+    target.classList.add("active");
 }
 
 function setStatus(msg) {
@@ -87,9 +92,7 @@ $("#host-btn").addEventListener("click", () => {
 
     peer.on("connection", connection => setupConnection(connection));
 
-    peer.on("error", err => {
-        alert("Network Error: " + err.type);
-    });
+    peer.on("error", err => alert("Network Error: " + err.type));
 });
 
 /* -----------------------------------------------
@@ -111,12 +114,10 @@ $("#join-btn").addEventListener("click", () => {
 });
 
 /* -----------------------------------------------
-   CONNECTION SETUP — includes reconnection safety
+   CONNECTION SETUP — WITH FULL RECONNECTION FIX
 --------------------------------------------------*/
 function setupConnection(connection) {
 
-    // 🔥 IMPORTANT:
-    // Always close old connection and override with new one
     if (conn && conn.open) {
         try { conn.close(); } catch(e){}
     }
@@ -125,10 +126,8 @@ function setupConnection(connection) {
 
     conn.on("open", () => {
         setStatus("Connected!");
-
         Net.startHeartbeat();
 
-        // Always request full sync on any new connection
         if (!isHost) {
             setStatus("Syncing Match Data…");
             Net.send({ type: "request_sync" });
@@ -143,7 +142,7 @@ function setupConnection(connection) {
 }
 
 /* -----------------------------------------------
-   DATA HANDLER
+   DATA HANDLING
 --------------------------------------------------*/
 function handleData(d) {
     switch (d.type) {
@@ -207,27 +206,44 @@ $("#submit-roster-btn").addEventListener("click", () => {
 
 function checkRosterReady() {
     if (crewState.home.players.length && crewState.away.players.length) {
-        crewState.phase = "dashboard";
+        crewState.phase = "scoreboard";   // ⬅ PATCHED
         restoreUI();
     }
 }
 
 /* -----------------------------------------------
-   RESTORE UI BASED ON STATE
+   RESTORE UI — FULLY PATCHED
 --------------------------------------------------*/
 function restoreUI() {
     updateScoreboardUI();
 
     switch (crewState.phase) {
-        case "roster": showScreen("roster"); break;
-        case "dashboard": showScreen("scoreboard"); break;
-        case "stage_select":
+
+        case "connection":
+            showScreen("connection");
+            break;
+
+        case "roster":
+            showScreen("roster");
+            break;
+
+        case "scoreboard":   // PATCHED
+            showScreen("scoreboard");
+            break;
+
+        case "stage-select": // PATCHED
             showScreen("stage-select");
             renderStages();
             updateStageInstructions();
             break;
-        case "report": showScreen("report"); break;
-        case "gameover": showScreen("gameover"); break;
+
+        case "report":
+            showScreen("report");
+            break;
+
+        case "gameover":
+            showScreen("gameover");
+            break;
     }
 }
 
@@ -253,7 +269,9 @@ function updateScoreboardUI() {
     const btn = $("#start-stage-select-btn");
     if (isHost) {
         btn.style.display = "block";
-        btn.textContent = crewState.matchNum === 1 ? "Start Game 1 (Stage Strike)" : "Select Next Stage";
+        btn.textContent = crewState.matchNum === 1
+            ? "Start Game 1 (Stage Strike)"
+            : "Select Next Stage";
     } else {
         btn.style.display = "none";
         $("#action-text").textContent = "Waiting for host...";
@@ -261,7 +279,7 @@ function updateScoreboardUI() {
 }
 
 /* -----------------------------------------------
-   STAGE SELECT
+   START STAGE-SELECTION — PATCHED
 --------------------------------------------------*/
 $("#start-stage-select-btn").addEventListener("click", () => {
     startStageSelection();
@@ -269,7 +287,7 @@ $("#start-stage-select-btn").addEventListener("click", () => {
 });
 
 function startStageSelection() {
-    crewState.phase = "stage_select";
+    crewState.phase = "stage-select";   // PATCHED
     showScreen("stage-select");
 
     if (crewState.matchNum === 1) {
@@ -289,6 +307,9 @@ function startStageSelection() {
     updateStageInstructions();
 }
 
+/* -----------------------------------------------
+   RENDER STAGES
+--------------------------------------------------*/
 function renderStages() {
     $("#starter-list").innerHTML = "";
     $("#counterpick-list").innerHTML = "";
@@ -323,6 +344,9 @@ function renderStages() {
         stageState.mode === "game1" ? "none" : "block";
 }
 
+/* -----------------------------------------------
+   UPDATE INSTRUCTIONS
+--------------------------------------------------*/
 function updateStageInstructions() {
     const myRole = isHost ? "home" : "away";
     const txt = $("#instructions");
@@ -338,7 +362,7 @@ function updateStageInstructions() {
 }
 
 /* -----------------------------------------------
-   EVENT DELEGATION FOR STAGE CLICKS
+   CLICK STAGE BUTTON (EVENT DELEGATION)
 --------------------------------------------------*/
 document.addEventListener("click", e => {
     if (e.target.matches(".stage-btn.selectable")) {
@@ -352,29 +376,29 @@ document.addEventListener("click", e => {
    STAGE LOGIC
 --------------------------------------------------*/
 function processStageLogic(stage) {
-    let remaining = stageState.available.length;
+    let rem = stageState.available.length;
 
     if (stageState.mode === "game1") {
 
-        if (remaining === 2) return confirmStage(stage);
+        if (rem === 2) return confirmStage(stage);
 
         stageState.bans.push(stage);
         stageState.available = stageState.available.filter(s => s !== stage);
 
-        if (remaining === 5) stageState.turn = "away";
-        if (remaining === 4) stageState.turn = "away";
-        if (remaining === 3) stageState.turn = "home";
+        if (rem === 5) stageState.turn = "away";
+        if (rem === 4) stageState.turn = "away";
+        if (rem === 3) stageState.turn = "home";
     }
 
     else {
-        // Winner bans 3 → loser picks
         if (stageState.banCount < 3) {
             stageState.banCount++;
             stageState.bans.push(stage);
             stageState.available = stageState.available.filter(s => s !== stage);
 
-            if (stageState.bbanCount === 3) {
-                stageState.turn = crewState.previousWinner === "home" ? "away" : "home";
+            if (stageState.banCount === 3) {
+                stageState.turn =
+                    crewState.previousWinner === "home" ? "away" : "home";
             }
         } else {
             return confirmStage(stage);
@@ -398,7 +422,7 @@ function confirmStage(stage) {
 }
 
 /* -----------------------------------------------
-   REPORTING RESULTS
+   REPORTING
 --------------------------------------------------*/
 let pendingWinner = "";
 
@@ -444,7 +468,7 @@ function applyGameResult(winner, winnerStocks) {
     if (crewState.away.stocks <= 0) return endCrewBattle("HOME TEAM", "home");
 
     crewState.matchNum++;
-    crewState.phase = "dashboard";
+    crewState.phase = "scoreboard";  // PATCHED
     restoreUI();
 }
 
