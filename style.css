@@ -17,13 +17,14 @@ body {
     border-radius: 12px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     width: 95%; 
-    max-width: 500px; /* Kept narrow for phone feel */
+    max-width: 500px; 
     text-align: center;
 }
 
 h1, h2, h3 { margin: 0.5rem 0; color: #1a1a1a; }
 hr { border: 0; border-top: 1px solid #eee; margin: 15px 0; }
 .hidden { display: none !important; }
+.small-text { font-size: 0.9rem; color: #666; }
 
 /* --- Inputs & Buttons --- */
 input[type="text"] {
@@ -94,7 +95,7 @@ input[type="text"] {
     background: #fff;
     border-radius: 6px;
     font-weight: 500;
-    width: 48%; /* 2 per row */
+    width: 48%; 
 }
 .stage-btn.banned { background: #ffebee; border-color: #ef9a9a; color: #c62828; text-decoration: line-through; opacity: 0.6; }
 .stage-btn.selectable { border-color: #007bff; background: #e6f2ff; cursor: pointer; }
@@ -110,4 +111,12 @@ input[type="text"] {
     font-size: 1.5rem;
     font-weight: bold;
     cursor: pointer;
+}
+
+/* --- Game Over --- */
+.final-score-box {
+    background: #f0f2f5;
+    padding: 20px;
+    border-radius: 10px;
+    margin: 20px 0;
 }
