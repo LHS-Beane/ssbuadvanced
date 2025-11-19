@@ -1,6 +1,6 @@
 /******************************************************
  *  SSBU CREW BATTLE MANAGER — PRO APP VERSION (B)
- *  Clean modular architecture + new HTML screen system
+ *  With full reconnection-safe WebRTC logic
  ******************************************************/
 
 /* -----------------------------------------------
@@ -29,7 +29,7 @@ let crewState = {
 let stageState = {
     available: [],
     bans: [],
-    mode: "", 
+    mode: "",
     turn: "",
     banCount: 0
 };
@@ -102,7 +102,7 @@ $("#join-btn").addEventListener("click", () => {
     peer = new Peer();
 
     peer.on("open", () => {
-        setStatus("Connecting...");
+        setStatus("Connecting…");
         const connection = peer.connect(target);
         setupConnection(connection);
     });
@@ -111,32 +111,49 @@ $("#join-btn").addEventListener("click", () => {
 });
 
 /* -----------------------------------------------
-   CONNECTION SETUP
+   CONNECTION SETUP — includes reconnection safety
 --------------------------------------------------*/
 function setupConnection(connection) {
+
+    // 🔥 IMPORTANT:
+    // Always close old connection and override with new one
+    if (conn && conn.open) {
+        try { conn.close(); } catch(e){}
+    }
+
     conn = connection;
 
     conn.on("open", () => {
         setStatus("Connected!");
+
         Net.startHeartbeat();
 
+        // Always request full sync on any new connection
         if (!isHost) {
-            setStatus("Syncing match data...");
+            setStatus("Syncing Match Data…");
             Net.send({ type: "request_sync" });
         }
     });
 
     conn.on("data", data => handleData(data));
-    conn.on("close", () => setStatus("Disconnected"));
+
+    conn.on("close", () => {
+        setStatus("Disconnected… reconnect or refresh");
+    });
 }
 
 /* -----------------------------------------------
-   STATE SYNC + DATA HANDLING
+   DATA HANDLER
 --------------------------------------------------*/
 function handleData(d) {
     switch (d.type) {
+
         case "request_sync":
-            Net.send({ type: "full_sync", crew: crewState, stage: stageState });
+            Net.send({
+                type: "full_sync",
+                crew: JSON.parse(JSON.stringify(crewState)),
+                stage: JSON.parse(JSON.stringify(stageState))
+            });
             break;
 
         case "full_sync":
@@ -166,7 +183,7 @@ function handleData(d) {
 }
 
 /* -----------------------------------------------
-   ROSTER
+   ROSTER ENTRY
 --------------------------------------------------*/
 $("#submit-roster-btn").addEventListener("click", () => {
     const myTeam = $("#my-team-name").value || (isHost ? "Home Team" : "Away Team");
@@ -215,7 +232,7 @@ function restoreUI() {
 }
 
 /* -----------------------------------------------
-   SCOREBOARD UI
+   SCOREBOARD
 --------------------------------------------------*/
 function updateScoreboardUI() {
     $("#disp-home-name").textContent = crewState.home.name;
@@ -244,7 +261,7 @@ function updateScoreboardUI() {
 }
 
 /* -----------------------------------------------
-   STAGE SELECTION
+   STAGE SELECT
 --------------------------------------------------*/
 $("#start-stage-select-btn").addEventListener("click", () => {
     startStageSelection();
@@ -285,6 +302,7 @@ function renderStages() {
         btn.dataset.stage = stage;
 
         const banned = stageState.bans.includes(stage);
+
         if (banned) {
             btn.classList.add("banned");
             btn.disabled = true;
@@ -320,7 +338,7 @@ function updateStageInstructions() {
 }
 
 /* -----------------------------------------------
-   EVENT DELEGATION FOR CLICKING STAGES
+   EVENT DELEGATION FOR STAGE CLICKS
 --------------------------------------------------*/
 document.addEventListener("click", e => {
     if (e.target.matches(".stage-btn.selectable")) {
@@ -331,19 +349,18 @@ document.addEventListener("click", e => {
 });
 
 /* -----------------------------------------------
-   STAGE LOGIC (GAME 1 + LATER GAMES)
+   STAGE LOGIC
 --------------------------------------------------*/
 function processStageLogic(stage) {
     let remaining = stageState.available.length;
 
     if (stageState.mode === "game1") {
-        // 1–2–1 striking logic
+
         if (remaining === 2) return confirmStage(stage);
 
         stageState.bans.push(stage);
         stageState.available = stageState.available.filter(s => s !== stage);
 
-        // Turn logic
         if (remaining === 5) stageState.turn = "away";
         if (remaining === 4) stageState.turn = "away";
         if (remaining === 3) stageState.turn = "home";
@@ -356,7 +373,7 @@ function processStageLogic(stage) {
             stageState.bans.push(stage);
             stageState.available = stageState.available.filter(s => s !== stage);
 
-            if (stageState.banCount === 3) {
+            if (stageState.bbanCount === 3) {
                 stageState.turn = crewState.previousWinner === "home" ? "away" : "home";
             }
         } else {
@@ -369,7 +386,7 @@ function processStageLogic(stage) {
 }
 
 /* -----------------------------------------------
-   CONFIRM STAGE → GO TO REPORT SCREEN
+   CONFIRM STAGE
 --------------------------------------------------*/
 function confirmStage(stage) {
     $("#report-stage-name").textContent = stage;
@@ -403,7 +420,7 @@ document.addEventListener("click", e => {
 });
 
 /* -----------------------------------------------
-   APPLY GAME RESULT + UPDATE CREW STATE
+   APPLY GAME RESULT
 --------------------------------------------------*/
 function applyGameResult(winner, winnerStocks) {
     const loser = winner === "home" ? "away" : "home";
@@ -415,21 +432,17 @@ function applyGameResult(winner, winnerStocks) {
 
     if (!LP || !WP) return;
 
-    // Deduct loser stocks
     crewState[loser].stocks -= LP.stocks;
     LP.stocks = 0;
     crewState[loser].currentIdx++;
 
-    // Deduct remaining winner stocks
     const diff = WP.stocks - winnerStocks;
     crewState[winner].stocks -= diff;
     WP.stocks = winnerStocks;
 
-    // Check for match end
     if (crewState.home.stocks <= 0) return endCrewBattle("AWAY TEAM", "away");
     if (crewState.away.stocks <= 0) return endCrewBattle("HOME TEAM", "home");
 
-    // Continue
     crewState.matchNum++;
     crewState.phase = "dashboard";
     restoreUI();
@@ -449,4 +462,3 @@ function endCrewBattle(winnerName, role) {
     crewState.phase = "gameover";
     showScreen("gameover");
 }
-
