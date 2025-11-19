@@ -1,270 +1,316 @@
-// main.js
+/******************************************************
+ *  SSBU CREW BATTLE MANAGER — PRO APP VERSION (B)
+ *  Clean modular architecture + new HTML screen system
+ ******************************************************/
 
-// --- CONSTANTS ---
+/* -----------------------------------------------
+   CONSTANTS
+--------------------------------------------------*/
 const STARTERS = ["Battlefield", "Final Destination", "Town & City", "Pokémon Stadium 2", "Smashville"];
 const COUNTERPICKS = ["Kalos Pokémon League", "Lylat Cruise", "Small Battlefield", "Yoshi's Story", "Hollow Bastion"];
 const FULL_STAGE_LIST = [...STARTERS, ...COUNTERPICKS];
 
-// --- GLOBAL STATE ---
-let peer, conn, isHost = false;
-let heartbeatInterval;
+/* -----------------------------------------------
+   GLOBAL STATE
+--------------------------------------------------*/
+let peer = null;
+let conn = null;
+let isHost = false;
+let heartbeatInterval = null;
 
-// The "Master State"
 let crewState = {
     home: { name: "Home", players: [], stocks: 12, currentIdx: 0 },
     away: { name: "Away", players: [], stocks: 12, currentIdx: 0 },
     matchNum: 1,
-    phase: 'roster', // roster, dashboard, stage_select, report, gameover
-    previousWinner: null 
+    phase: "roster",
+    previousWinner: null
 };
 
-let stageState = { available: [], bans: [], turn: '', banCount: 0, mode: '' }; 
-
-// --- DOM ELEMENTS ---
-const screens = {
-    conn: document.getElementById('screen-connection'),
-    roster: document.getElementById('screen-roster'),
-    scoreboard: document.getElementById('screen-scoreboard'),
-    stage: document.getElementById('screen-stage-select'),
-    report: document.getElementById('screen-report'),
-    gameover: document.getElementById('screen-gameover')
+let stageState = {
+    available: [],
+    bans: [],
+    mode: "", 
+    turn: "",
+    banCount: 0
 };
 
-// --- 1. NETWORKING (STABLE HANDSHAKE) ---
+/* -----------------------------------------------
+   DOM HELPERS
+--------------------------------------------------*/
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
 
-document.getElementById('host-btn').addEventListener('click', () => {
-    // Generate Room ID
-    const newRoomId = 'cb-' + Math.random().toString(36).substr(2, 4);
-    
-    // Create Peer (Default Settings)
-    peer = new Peer(newRoomId);
-    
-    peer.on('open', (id) => {
-        document.getElementById('room-id').textContent = id;
-        document.getElementById('host-btn').classList.add('hidden');
-        document.getElementById('host-info').classList.remove('hidden');
-        document.getElementById('join-section').classList.add('hidden'); // Hide join options
-        document.getElementById('conn-status').textContent = 'Waiting for Away Team...';
-        isHost = true;
+/* -----------------------------------------------
+   SCREEN MANAGER
+--------------------------------------------------*/
+function showScreen(name) {
+    $$(".screen").forEach(s => s.classList.remove("active"));
+    $(`[data-screen="${name}"]`).classList.add("active");
+}
+
+function setStatus(msg) {
+    $("#global-status").textContent = msg;
+}
+
+/* -----------------------------------------------
+   NETWORK WRAPPER
+--------------------------------------------------*/
+const Net = {
+    send(obj) {
+        if (conn && conn.open) conn.send(JSON.parse(JSON.stringify(obj)));
+    },
+
+    startHeartbeat() {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => {
+            if (conn && conn.open) Net.send({ type: "ping" });
+        }, 2000);
+    }
+};
+
+/* -----------------------------------------------
+   HOST ROOM CREATION
+--------------------------------------------------*/
+$("#host-btn").addEventListener("click", () => {
+    const roomId = "cb-" + Math.random().toString(36).substr(2, 4);
+    isHost = true;
+
+    peer = new Peer(roomId);
+
+    peer.on("open", id => {
+        $("#room-id").textContent = id;
+        $("#host-btn").classList.add("hide");
+        $("#host-info").classList.remove("hide");
+        $("#join-section").classList.add("hide");
+        setStatus("Waiting for Away Team...");
     });
 
-    peer.on('connection', (connection) => {
+    peer.on("connection", connection => setupConnection(connection));
+
+    peer.on("error", err => {
+        alert("Network Error: " + err.type);
+    });
+});
+
+/* -----------------------------------------------
+   JOIN EXISTING ROOM
+--------------------------------------------------*/
+$("#join-btn").addEventListener("click", () => {
+    const target = $("#join-id-input").value.trim();
+    if (!target) return;
+
+    peer = new Peer();
+
+    peer.on("open", () => {
+        setStatus("Connecting...");
+        const connection = peer.connect(target);
         setupConnection(connection);
     });
-    
-    peer.on('error', (err) => {
-        alert("Network Error: " + err.type + "\nTry refreshing the page.");
-    });
+
+    peer.on("error", err => alert("Connection Failed: " + err.type));
 });
 
-document.getElementById('join-btn').addEventListener('click', () => {
-    const id = document.getElementById('join-id-input').value.trim();
-    if(id) {
-        peer = new Peer();
-        peer.on('open', () => setupConnection(peer.connect(id)));
-        peer.on('error', (err) => alert("Network Error: " + err.type + "\nCheck ID or Internet."));
-    }
-});
-
+/* -----------------------------------------------
+   CONNECTION SETUP
+--------------------------------------------------*/
 function setupConnection(connection) {
     conn = connection;
-    
-    // Wait for connection to fully open
-    conn.on('open', () => {
-        document.getElementById('conn-status').textContent = 'Connected!';
-        startHeartbeat();
 
-        // HANDSHAKE: Client asks for data once connected
+    conn.on("open", () => {
+        setStatus("Connected!");
+        Net.startHeartbeat();
+
         if (!isHost) {
-            document.getElementById('conn-status').textContent = 'Syncing Match Data...';
-            sendData({ type: 'request_sync' });
+            setStatus("Syncing match data...");
+            Net.send({ type: "request_sync" });
         }
     });
 
-    conn.on('data', (data) => {
-        handleData(data);
-    });
-
-    conn.on('close', () => {
-        if(heartbeatInterval) clearInterval(heartbeatInterval);
-    });
+    conn.on("data", data => handleData(data));
+    conn.on("close", () => setStatus("Disconnected"));
 }
 
-function sendData(data) { if(conn && conn.open) conn.send(data); }
+/* -----------------------------------------------
+   STATE SYNC + DATA HANDLING
+--------------------------------------------------*/
+function handleData(d) {
+    switch (d.type) {
+        case "request_sync":
+            Net.send({ type: "full_sync", crew: crewState, stage: stageState });
+            break;
 
-function startHeartbeat() {
-    if (heartbeatInterval) clearInterval(heartbeatInterval);
-    heartbeatInterval = setInterval(() => {
-        if (conn && conn.open) {
-            conn.send({ type: 'ping' });
-        }
-    }, 2000); 
-}
+        case "full_sync":
+            crewState = d.crew;
+            stageState = d.stage;
+            restoreUI();
+            break;
 
-function showScreen(screenName) {
-    Object.values(screens).forEach(s => s.classList.add('hidden'));
-    screens[screenName].classList.remove('hidden');
-}
+        case "roster_submit":
+            crewState[d.role].name = d.name;
+            crewState[d.role].players = d.players;
+            checkRosterReady();
+            break;
 
-// --- 2. ROSTER LOGIC ---
+        case "start_stage_select":
+            startStageSelection();
+            break;
 
-document.getElementById('submit-roster-btn').addEventListener('click', () => {
-    const teamName = document.getElementById('my-team-name').value || (isHost ? "Home Team" : "Away Team");
-    const myRole = isHost ? 'home' : 'away';
+        case "stage_click":
+            processStageLogic(d.stage);
+            break;
 
-    const playerObjs = [];
-    for(let i = 1; i <= 4; i++) {
-        playerObjs.push({ name: `${teamName} Player ${i}`, stocks: 3 });
+        case "game_result":
+            applyGameResult(d.winner, d.stocks);
+            break;
     }
-    
-    crewState[myRole].name = teamName;
-    crewState[myRole].players = playerObjs;
+}
 
-    document.getElementById('submit-roster-btn').disabled = true;
-    document.getElementById('roster-status').textContent = "Ready! Waiting for opponent...";
+/* -----------------------------------------------
+   ROSTER
+--------------------------------------------------*/
+$("#submit-roster-btn").addEventListener("click", () => {
+    const myTeam = $("#my-team-name").value || (isHost ? "Home Team" : "Away Team");
+    const role = isHost ? "home" : "away";
 
-    crewState.phase = 'roster'; 
+    let players = [];
+    for (let i = 1; i <= 4; i++) {
+        players.push({ name: `${myTeam} Player ${i}`, stocks: 3 });
+    }
 
-    sendData({ type: 'roster_submit', role: myRole, name: teamName, players: playerObjs });
+    crewState[role].name = myTeam;
+    crewState[role].players = players;
+
+    $("#submit-roster-btn").disabled = true;
+    $("#roster-status").textContent = "Ready! Waiting for opponent...";
+
+    Net.send({ type: "roster_submit", role, name: myTeam, players });
+
     checkRosterReady();
 });
 
 function checkRosterReady() {
-    if(crewState.home.players.length > 0 && crewState.away.players.length > 0) {
-        if(crewState.phase === 'roster') {
-            crewState.phase = 'dashboard';
-        }
-        restoreUI(); 
+    if (crewState.home.players.length && crewState.away.players.length) {
+        crewState.phase = "dashboard";
+        restoreUI();
     }
 }
 
-// --- 3. UI RESTORATION (SYNC) ---
+/* -----------------------------------------------
+   RESTORE UI BASED ON STATE
+--------------------------------------------------*/
 function restoreUI() {
     updateScoreboardUI();
 
-    // Show correct screen
-    if(crewState.phase === 'roster') {
-        showScreen('roster');
-        // Check if I submitted already
-        const myRole = isHost ? 'home' : 'away';
-        if(crewState[myRole].players.length > 0) {
-            document.getElementById('submit-roster-btn').disabled = true;
-            document.getElementById('roster-status').textContent = "Ready! Waiting for opponent...";
-        }
-    } 
-    else if(crewState.phase === 'dashboard') {
-        showScreen('scoreboard');
-    } 
-    else if(crewState.phase === 'stage_select') {
-        showScreen('stage');
-        renderStages();
-        updateStageInstructions();
-    } 
-    else if(crewState.phase === 'report') {
-        showScreen('report');
-    }
-    else if(crewState.phase === 'gameover') {
-        let winner = (crewState.home.stocks > 0) ? "HOME TEAM" : "AWAY TEAM";
-        let role = (crewState.home.stocks > 0) ? 'home' : 'away';
-        endCrewBattle(winner, role);
+    switch (crewState.phase) {
+        case "roster": showScreen("roster"); break;
+        case "dashboard": showScreen("scoreboard"); break;
+        case "stage_select":
+            showScreen("stage-select");
+            renderStages();
+            updateStageInstructions();
+            break;
+        case "report": showScreen("report"); break;
+        case "gameover": showScreen("gameover"); break;
     }
 }
 
-// --- 4. SCOREBOARD LOGIC ---
-
+/* -----------------------------------------------
+   SCOREBOARD UI
+--------------------------------------------------*/
 function updateScoreboardUI() {
-    document.getElementById('disp-home-name').textContent = crewState.home.name;
-    document.getElementById('score-home').textContent = crewState.home.stocks;
-    
-    document.getElementById('disp-away-name').textContent = crewState.away.name;
-    document.getElementById('score-away').textContent = crewState.away.stocks;
+    $("#disp-home-name").textContent = crewState.home.name;
+    $("#disp-away-name").textContent = crewState.away.name;
 
-    const homeP = crewState.home.players[crewState.home.currentIdx];
-    const awayP = crewState.away.players[crewState.away.currentIdx];
+    $("#score-home").textContent = crewState.home.stocks;
+    $("#score-away").textContent = crewState.away.stocks;
 
-    document.getElementById('current-home-player').textContent = homeP ? homeP.name : "Eliminated";
-    document.getElementById('stocks-home').textContent = "●".repeat(homeP ? homeP.stocks : 0);
+    const HP = crewState.home.players[crewState.home.currentIdx];
+    const AP = crewState.away.players[crewState.away.currentIdx];
 
-    document.getElementById('current-away-player').textContent = awayP ? awayP.name : "Eliminated";
-    document.getElementById('stocks-away').textContent = "●".repeat(awayP ? awayP.stocks : 0);
+    $("#current-home-player").textContent = HP ? HP.name : "Eliminated";
+    $("#stocks-home").textContent = HP ? "●".repeat(HP.stocks) : "";
 
-    const btn = document.getElementById('start-stage-select-btn');
-    if(isHost) {
-        btn.style.display = 'block';
+    $("#current-away-player").textContent = AP ? AP.name : "Eliminated";
+    $("#stocks-away").textContent = AP ? "●".repeat(AP.stocks) : "";
+
+    const btn = $("#start-stage-select-btn");
+    if (isHost) {
+        btn.style.display = "block";
         btn.textContent = crewState.matchNum === 1 ? "Start Game 1 (Stage Strike)" : "Select Next Stage";
     } else {
-        btn.style.display = 'none';
-        document.getElementById('action-text').textContent = "Waiting for Host to start stage selection...";
+        btn.style.display = "none";
+        $("#action-text").textContent = "Waiting for host...";
     }
 }
 
-document.getElementById('start-stage-select-btn').addEventListener('click', () => {
+/* -----------------------------------------------
+   STAGE SELECTION
+--------------------------------------------------*/
+$("#start-stage-select-btn").addEventListener("click", () => {
     startStageSelection();
-    sendData({ type: 'start_stage_select' });
+    Net.send({ type: "start_stage_select" });
 });
 
-// --- 5. STAGE SELECTION LOGIC ---
-
 function startStageSelection() {
-    crewState.phase = 'stage_select'; 
-    showScreen('stage');
-    
-    stageState.available = (crewState.matchNum === 1) ? [...STARTERS] : [...FULL_STAGE_LIST];
-    stageState.bans = [];
-    
-    if(crewState.matchNum === 1) {
-        stageState.mode = 'game1';
-        stageState.turn = 'home'; 
-        document.getElementById('stage-phase-title').textContent = "Game 1: Striking";
+    crewState.phase = "stage_select";
+    showScreen("stage-select");
+
+    if (crewState.matchNum === 1) {
+        stageState.mode = "game1";
+        stageState.available = [...STARTERS];
+        stageState.turn = "home";
     } else {
-        stageState.mode = 'subsequent';
-        stageState.turn = crewState.previousWinner; 
+        stageState.mode = "subseq";
+        stageState.available = [...FULL_STAGE_LIST];
+        stageState.turn = crewState.previousWinner;
         stageState.banCount = 0;
-        document.getElementById('stage-phase-title').textContent = "Counterpick Phase";
     }
-    
+
+    stageState.bans = [];
+
     renderStages();
     updateStageInstructions();
 }
 
 function renderStages() {
-    const list1 = document.getElementById('starter-list');
-    const list2 = document.getElementById('counterpick-list');
-    list1.innerHTML = ''; list2.innerHTML = '';
+    $("#starter-list").innerHTML = "";
+    $("#counterpick-list").innerHTML = "";
 
-    list2.parentElement.style.display = (stageState.mode === 'game1') ? 'none' : 'block';
+    const list = stageState.mode === "game1" ? STARTERS : FULL_STAGE_LIST;
 
-    const relevantList = (stageState.mode === 'game1') ? STARTERS : FULL_STAGE_LIST;
-
-    relevantList.forEach(stage => {
-        const btn = document.createElement('button');
+    list.forEach(stage => {
+        const btn = document.createElement("button");
+        btn.className = "stage-btn";
         btn.textContent = stage;
-        btn.className = 'stage-btn';
-        
-        if(stageState.bans.includes(stage)) {
-            btn.classList.add('banned');
+        btn.dataset.stage = stage;
+
+        const banned = stageState.bans.includes(stage);
+        if (banned) {
+            btn.classList.add("banned");
             btn.disabled = true;
         } else {
-            const myRole = isHost ? 'home' : 'away';
-            if(myRole === stageState.turn) {
-                btn.classList.add('selectable');
-                btn.onclick = () => handleStageClick(stage);
+            const myRole = isHost ? "home" : "away";
+            if (myRole === stageState.turn) {
+                btn.classList.add("selectable");
             } else {
                 btn.disabled = true;
             }
         }
 
-        if(STARTERS.includes(stage)) list1.appendChild(btn);
-        else list2.appendChild(btn);
+        if (STARTERS.includes(stage)) $("#starter-list").append(btn);
+        else $("#counterpick-list").append(btn);
     });
+
+    $("#counterpick-list").closest(".stage-section").style.display =
+        stageState.mode === "game1" ? "none" : "block";
 }
 
 function updateStageInstructions() {
-    const myRole = isHost ? 'home' : 'away';
-    const txt = document.getElementById('instructions');
-    const turnName = (stageState.turn === 'home') ? crewState.home.name : crewState.away.name;
+    const myRole = isHost ? "home" : "away";
+    const txt = $("#instructions");
+    const turnName = stageState.turn === "home" ? crewState.home.name : crewState.away.name;
 
-    if(myRole === stageState.turn) {
+    if (myRole === stageState.turn) {
         txt.textContent = "Your Turn: Select/Ban a stage.";
         txt.style.color = "#007bff";
     } else {
@@ -273,155 +319,134 @@ function updateStageInstructions() {
     }
 }
 
-function handleStageClick(stage) {
-    const myRole = isHost ? 'home' : 'away';
-    if(myRole !== stageState.turn) return;
+/* -----------------------------------------------
+   EVENT DELEGATION FOR CLICKING STAGES
+--------------------------------------------------*/
+document.addEventListener("click", e => {
+    if (e.target.matches(".stage-btn.selectable")) {
+        const stage = e.target.dataset.stage;
+        processStageLogic(stage);
+        Net.send({ type: "stage_click", stage });
+    }
+});
 
-    sendData({ type: 'stage_click', stage: stage });
-    processStageLogic(stage);
-}
-
+/* -----------------------------------------------
+   STAGE LOGIC (GAME 1 + LATER GAMES)
+--------------------------------------------------*/
 function processStageLogic(stage) {
-    // GAME 1: 1-2-1 Strike
-    if(stageState.mode === 'game1') {
-        const rem = stageState.available.length;
-        
-        // Last step: 2 stages left, Home PICKS
-        if(rem === 2) {
-            confirmStage(stage);
-            return;
-        }
+    let remaining = stageState.available.length;
 
-        // Normal Ban
+    if (stageState.mode === "game1") {
+        // 1–2–1 striking logic
+        if (remaining === 2) return confirmStage(stage);
+
         stageState.bans.push(stage);
         stageState.available = stageState.available.filter(s => s !== stage);
-        
-        const newRem = stageState.available.length;
-        // Start=5 (Home). Bans=4(Away), 3(Away), 2(Home Pick)
-        if(newRem === 4) stageState.turn = 'away';
-        else if(newRem === 3) stageState.turn = 'away';
-        else if(newRem === 2) stageState.turn = 'home'; 
-    } 
-    // GAME 2+: Winner Bans 3, Loser Picks
+
+        // Turn logic
+        if (remaining === 5) stageState.turn = "away";
+        if (remaining === 4) stageState.turn = "away";
+        if (remaining === 3) stageState.turn = "home";
+    }
+
     else {
-        if(stageState.banCount < 3) {
+        // Winner bans 3 → loser picks
+        if (stageState.banCount < 3) {
+            stageState.banCount++;
             stageState.bans.push(stage);
             stageState.available = stageState.available.filter(s => s !== stage);
-            stageState.banCount++;
-            
-            if(stageState.banCount === 3) {
-                stageState.turn = (crewState.previousWinner === 'home') ? 'away' : 'home';
+
+            if (stageState.banCount === 3) {
+                stageState.turn = crewState.previousWinner === "home" ? "away" : "home";
             }
         } else {
-            confirmStage(stage);
-            return;
+            return confirmStage(stage);
         }
     }
-    
+
     renderStages();
     updateStageInstructions();
 }
 
+/* -----------------------------------------------
+   CONFIRM STAGE → GO TO REPORT SCREEN
+--------------------------------------------------*/
 function confirmStage(stage) {
-    document.getElementById('report-stage-name').textContent = stage;
-    crewState.phase = 'report';
-    showScreen('report');
-    document.getElementById('stock-count-selector').classList.add('hidden');
-    document.querySelectorAll('.report-buttons button').forEach(b => b.classList.remove('hidden'));
+    $("#report-stage-name").textContent = stage;
+    crewState.phase = "report";
+    showScreen("report");
+
+    $("#stock-count-selector").classList.add("hide");
+    $$(".report-buttons button").forEach(b => b.classList.remove("hide"));
 }
 
-// --- 6. REPORTING LOGIC ---
+/* -----------------------------------------------
+   REPORTING RESULTS
+--------------------------------------------------*/
+let pendingWinner = "";
 
-let pendingWinner = '';
+$("#btn-home-won").addEventListener("click", () => beginStockEntry("home"));
+$("#btn-away-won").addEventListener("click", () => beginStockEntry("away"));
 
-document.getElementById('btn-home-won').addEventListener('click', () => { setupReport('home'); });
-document.getElementById('btn-away-won').addEventListener('click', () => { setupReport('away'); });
-
-function setupReport(winnerRole) {
-    pendingWinner = winnerRole;
-    document.querySelectorAll('.report-buttons button').forEach(b => b.classList.add('hidden'));
-    document.getElementById('stock-count-selector').classList.remove('hidden');
+function beginStockEntry(role) {
+    pendingWinner = role;
+    $$(".report-buttons button").forEach(b => b.classList.add("hide"));
+    $("#stock-count-selector").classList.remove("hide");
 }
 
-function reportConfirm(stocksRemaining) {
-    applyGameResult(pendingWinner, stocksRemaining);
-    sendData({ type: 'game_result', winner: pendingWinner, stocks: stocksRemaining });
-}
-
-function applyGameResult(winnerRole, winnerStocks) {
-    crewState.previousWinner = winnerRole;
-    const loserRole = (winnerRole === 'home') ? 'away' : 'home';
-
-    const loserP = crewState[loserRole].players[crewState[loserRole].currentIdx];
-    crewState[loserRole].stocks -= loserP.stocks; 
-    loserP.stocks = 0;
-    crewState[loserRole].currentIdx++; 
-
-    const winnerP = crewState[winnerRole].players[crewState[winnerRole].currentIdx];
-    const stockDiff = winnerP.stocks - winnerStocks; 
-    crewState[winnerRole].stocks -= stockDiff;
-    winnerP.stocks = winnerStocks; 
-
-    if(crewState.home.stocks <= 0) {
-        crewState.phase = 'gameover';
-        endCrewBattle("AWAY TEAM", 'away');
-    } else if (crewState.away.stocks <= 0) {
-        crewState.phase = 'gameover';
-        endCrewBattle("HOME TEAM", 'home');
-    } else {
-        crewState.matchNum++;
-        crewState.phase = 'dashboard';
-        restoreUI();
+document.addEventListener("click", e => {
+    if (e.target.closest("[data-stocks]")) {
+        const stocks = Number(e.target.dataset.stocks);
+        Net.send({ type: "game_result", winner: pendingWinner, stocks });
+        applyGameResult(pendingWinner, stocks);
     }
+});
+
+/* -----------------------------------------------
+   APPLY GAME RESULT + UPDATE CREW STATE
+--------------------------------------------------*/
+function applyGameResult(winner, winnerStocks) {
+    const loser = winner === "home" ? "away" : "home";
+
+    crewState.previousWinner = winner;
+
+    const LP = crewState[loser].players[crewState[loser].currentIdx];
+    const WP = crewState[winner].players[crewState[winner].currentIdx];
+
+    if (!LP || !WP) return;
+
+    // Deduct loser stocks
+    crewState[loser].stocks -= LP.stocks;
+    LP.stocks = 0;
+    crewState[loser].currentIdx++;
+
+    // Deduct remaining winner stocks
+    const diff = WP.stocks - winnerStocks;
+    crewState[winner].stocks -= diff;
+    WP.stocks = winnerStocks;
+
+    // Check for match end
+    if (crewState.home.stocks <= 0) return endCrewBattle("AWAY TEAM", "away");
+    if (crewState.away.stocks <= 0) return endCrewBattle("HOME TEAM", "home");
+
+    // Continue
+    crewState.matchNum++;
+    crewState.phase = "dashboard";
+    restoreUI();
 }
 
-function endCrewBattle(winnerName, winnerRole) {
-    document.getElementById('winner-banner').textContent = winnerName + " WINS!";
-    
-    let homeTaken, awayTaken;
-    if (winnerRole === 'home') {
-        homeTaken = 12;
-        awayTaken = 12 - crewState.home.stocks;
-    } else {
-        awayTaken = 12;
-        homeTaken = 12 - crewState.away.stocks;
-    }
-    
-    document.getElementById('final-score-display').textContent = `${homeTaken} - ${awayTaken}`;
-    showScreen('gameover');
+/* -----------------------------------------------
+   END MATCH
+--------------------------------------------------*/
+function endCrewBattle(winnerName, role) {
+    $("#winner-banner").textContent = winnerName + " WINS!";
+
+    const homeTaken = role === "home" ? 12 : 12 - crewState.away.stocks;
+    const awayTaken = role === "away" ? 12 : 12 - crewState.home.stocks;
+
+    $("#final-score-display").textContent = `${homeTaken} - ${awayTaken}`;
+
+    crewState.phase = "gameover";
+    showScreen("gameover");
 }
 
-// --- 7. DATA HANDLING ---
-
-function handleData(data) {
-    switch(data.type) {
-        case 'request_sync':
-            // Host gets request -> Sends data
-            sendData({ type: 'full_sync', crew: crewState, stage: stageState });
-            break;
-            
-        case 'full_sync':
-            // Client receives data -> Updates UI
-            crewState = data.crew;
-            stageState = data.stage;
-            restoreUI();
-            break;
-            
-        case 'roster_submit':
-            crewState[data.role].name = data.name;
-            crewState[data.role].players = data.players;
-            checkRosterReady();
-            break;
-        case 'start_stage_select':
-            startStageSelection();
-            break;
-        case 'stage_click':
-            processStageLogic(data.stage);
-            break;
-        case 'game_result':
-            applyGameResult(data.winner, data.stocks);
-            break;
-        case 'ping':
-            break;
-    }
-}
