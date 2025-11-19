@@ -1,72 +1,52 @@
-/* =========================================================
-   Base Layout
-   ========================================================= */
+/* ===========================
+   GLOBAL THEME
+   =========================== */
+
 :root {
-    --primary: #007bff;
-    --primary-dark: #0056b3;
-    --bg-light: #f0f2f5;
-    --card-bg: #ffffff;
-    --border-light: #e5e5e5;
-
-    --radius: 12px;
-    --radius-sm: 6px;
-
-    --transition: 0.2s ease;
+    --blue: #00a8ff;
+    --blue-dark: #007ac1;
+    --bg-dark: #0d1117;
+    --bg-card: #161b22;
+    --text-light: #e6edf3;
+    --text-muted: #8b949e;
+    --danger: #d9534f;
+    --border: #2d333b;
+    font-size: 16px;
 }
 
-*, *::before, *::after {
+* {
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
 }
 
 body {
     margin: 0;
-    padding: 1rem;
-    background-color: var(--bg-light);
+    background: var(--bg-dark);
+    color: var(--text-light);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-
     display: flex;
     justify-content: center;
-    align-items: start;
-
+    padding: 1rem;
     min-height: 100vh;
 }
 
-/* App Wrapper */
 .app-container {
     width: 100%;
-    max-width: 480px;
-    background: var(--card-bg);
-    padding: 1.5rem;
-    border-radius: var(--radius);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    max-width: 500px;
 }
 
-/* =========================================================
-   Typography
-   ========================================================= */
-h1, h2, h3 {
-    margin: 0.5rem 0;
-    color: #111;
-    text-align: center;
-}
 
-p {
-    margin: 0.5rem 0;
-}
+/* ===========================
+   SCREENS
+   =========================== */
 
-.center {
-    text-align: center;
-}
-
-.label {
-    font-weight: 600;
-}
-
-/* =========================================================
-   Screens
-   ========================================================= */
 .screen {
     display: none;
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    box-shadow: 0 0 25px rgba(0,0,0,0.4);
 }
 
 .screen.active {
@@ -77,257 +57,265 @@ p {
     display: none !important;
 }
 
+.app-title {
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+    color: var(--blue);
+}
+
 .screen-subtitle {
+    text-align: center;
+    margin-top: 0;
     margin-bottom: 1rem;
-    color: #222;
+    font-size: 1.3rem;
+    font-weight: 600;
 }
 
-/* =========================================================
-   Status / Notifications
-   ========================================================= */
+
+/* ===========================
+   STATUS BAR
+   =========================== */
+
 .status-bar {
-    background: #f7f7f7;
-    border-left: 4px solid var(--primary);
+    width: 100%;
+    background: #111;
+    color: var(--blue);
     padding: 0.75rem;
-    border-radius: var(--radius-sm);
-    font-weight: 600;
-    color: #444;
-    margin-top: 1rem;
     text-align: center;
-}
-
-/* Global Status */
-#global-status {
+    font-weight: 600;
+    border-radius: 8px;
     margin-bottom: 1rem;
+    border: 1px solid var(--blue-dark);
 }
 
-/* Highlight Text (Stage Instructions) */
-.highlight-text {
-    color: var(--primary);
-    font-weight: 600;
-    text-align: center;
-    min-height: 1.2rem;
-}
 
-/* =========================================================
-   Inputs & Buttons
-   ========================================================= */
-.input-group input,
+/* ===========================
+   INPUTS & BUTTONS
+   =========================== */
+
 input[type="text"] {
     width: 100%;
     padding: 14px;
-    border-radius: var(--radius-sm);
-    border: 1px solid #ccc;
     font-size: 1rem;
-    margin-bottom: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #0f1318;
+    color: var(--text-light);
+    margin-bottom: 1rem;
 }
 
 .btn-full {
     width: 100%;
-    padding: 14px;
+    padding: 16px;
     font-size: 1.1rem;
-    font-weight: 600;
-    border-radius: var(--radius);
+    font-weight: 700;
+    background: var(--blue);
     border: none;
+    border-radius: 10px;
+    color: #fff;
     cursor: pointer;
-
-    background: var(--primary);
-    color: white;
-
-    transition: var(--transition);
-    -webkit-tap-highlight-color: transparent;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    transition: 0.15s ease;
 }
 
 .btn-full:hover {
-    background: var(--primary-dark);
+    background: var(--blue-dark);
 }
 
 .btn-full:disabled {
-    background: #ccc;
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
-/* Small separator divider */
-.divider {
-    margin: 1rem 0;
-    border: none;
-    border-top: 1px solid var(--border-light);
-}
-
-/* =========================================================
-   Module Blocks
-   ========================================================= */
 .module {
-    margin: 1rem 0;
+    margin-bottom: 2rem;
+}
+
+.divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.25rem 0;
+}
+
+.center {
+    text-align: center;
+}
+
+.label {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.info-text {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
 }
 
 .room-display {
-    background: #e9ecef;
+    background: #0f1318;
     padding: 12px;
-    border-radius: var(--radius-sm);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    text-align: center;
     font-size: 1.4rem;
-    letter-spacing: 2px;
     margin-top: 0.5rem;
-    user-select: text;
 }
 
-/* =========================================================
+
+
+/* ===========================
    SCOREBOARD
-   ========================================================= */
+   =========================== */
+
 .scoreboard-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #fafafa;
+    background: #11161d;
     padding: 1rem;
-    border-radius: var(--radius);
+    border-radius: 12px;
     margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
 }
 
 .team-box {
-    flex: 1;
+    width: 40%;
     text-align: center;
 }
 
-.team-box small {
-    color: #777;
-}
-
 .big-score {
-    font-size: 2.5rem;
-    font-weight: 800;
-    color: var(--primary);
-    line-height: 1;
+    font-size: 2.8rem;
+    font-weight: 900;
+    color: var(--blue);
 }
 
 .vs-badge {
-    font-weight: bold;
-    color: #888;
-    margin: 0 0.75rem;
+    font-size: 1.2rem;
+    color: var(--text-muted);
+    font-weight: 700;
 }
 
 .matchup-panel {
     display: flex;
     justify-content: space-between;
-    gap: 1rem;
     margin-bottom: 1.5rem;
 }
 
 .active-player {
-    flex: 1;
-    border: 2px solid #eaeaea;
+    width: 47%;
+    background: #11161d;
     padding: 1rem;
-    border-radius: var(--radius-sm);
-    background: #fff;
-}
-
-/* highlight per team */
-.active-player[data-team="home"] {
-    border-color: #a3d3ff;
-    background: #e9f3ff;
-}
-
-.active-player[data-team="away"] {
-    border-color: #ffb3b3;
-    background: #ffe6e6;
+    border-radius: 12px;
+    border: 1px solid var(--border);
 }
 
 .player-name {
-    font-size: 1.1rem;
-    font-weight: 600;
+    display: block;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
 }
 
 .stock-dots {
-    font-size: 1.3rem;
-    letter-spacing: 3px;
-    margin-top: 6px;
-    color: #333;
+    font-size: 1.4rem;
+    letter-spacing: 4px;
 }
 
-.action-panel {
-    margin-top: 1rem;
-}
 
-/* =========================================================
+
+/* ===========================
    STAGE SELECT
-   ========================================================= */
+   =========================== */
+
 .stage-section {
-    margin: 1rem 0;
+    margin-bottom: 1.25rem;
 }
 
 .stage-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
     margin-top: 0.75rem;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: center;
 }
 
 .stage-btn {
-    flex: 0 0 48%;
-    padding: 12px 5px;
-    border-radius: var(--radius-sm);
+    padding: 14px 6px;
+    background: #0f1318;
+    border-radius: 8px;
+    border: 2px solid var(--border);
+    color: var(--text-light);
     font-size: 0.95rem;
-    font-weight: 500;
-    border: 2px solid #eee;
-    background: #fff;
+    text-align: center;
     cursor: pointer;
-    transition: var(--transition);
+    font-weight: 600;
+}
+
+.stage-btn:hover {
+    border-color: var(--blue);
 }
 
 .stage-btn.banned {
-    background: #ffebee;
-    border-color: #ef9a9a;
-    color: #b71c1c;
-    opacity: 0.6;
+    background: #2a0000;
+    border-color: #920000;
     text-decoration: line-through;
+    opacity: 0.6;
 }
 
 .stage-btn.selectable {
-    border-color: var(--primary);
-    background: #e6f2ff;
+    border-color: var(--blue);
+    background: #002a40;
 }
 
-/* =========================================================
-   REPORT RESULT
-   ========================================================= */
+
+
+/* ===========================
+   REPORTING SCREEN
+   =========================== */
+
 .report-buttons {
-    display: grid;
-    gap: 1rem;
-    margin: 1.5rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
 }
 
 .stock-number-buttons {
     display: flex;
-    gap: 15px;
     justify-content: center;
+    gap: 1rem;
     margin-top: 1rem;
 }
 
 .stock-number-buttons button {
-    width: 60px;
-    height: 60px;
-    border-radius: 100px;
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
     border: none;
-    background: #28a745;
-    color: white;
+    background: var(--blue);
+    color: #fff;
     font-size: 1.4rem;
-    font-weight: bold;
+    font-weight: 800;
     cursor: pointer;
-    transition: var(--transition);
 }
 
 .stock-number-buttons button:hover {
-    background: #1e7e34;
+    background: var(--blue-dark);
 }
 
-/* =========================================================
-   GAME OVER
-   ========================================================= */
+
+
+/* ===========================
+   FINAL SCREENS
+   =========================== */
+
 .final-score-box {
-    padding: 1.25rem;
-    background: #f0f2f5;
-    border-radius: var(--radius);
-    margin: 1.5rem 0;
-    text-align: center;
+    background: #11161d;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    margin: 2rem 0;
 }
 
