@@ -9,7 +9,7 @@ const FULL_STAGE_LIST = [...STARTERS, ...COUNTERPICKS];
 let peer, conn, isHost = false;
 let heartbeatInterval;
 
-// The "Master State" 
+// The "Master State" - This is what saves the game
 let crewState = {
     home: { name: "Home", players: [], stocks: 12, currentIdx: 0 },
     away: { name: "Away", players: [], stocks: 12, currentIdx: 0 },
@@ -31,20 +31,14 @@ const screens = {
     gameover: document.getElementById('screen-gameover')
 };
 
-// --- 1. NETWORKING (WITH FIREWALL FIX) ---
+// --- 1. NETWORKING (SIMPLE STABLE VERSION) ---
 
 document.getElementById('host-btn').addEventListener('click', () => {
+    // 1. Generate Room ID
     const newRoomId = 'cb-' + Math.random().toString(36).substr(2, 4);
     
-    // FIREWALL FIX RE-ADDED:
-    peer = new Peer(newRoomId, {
-        config: {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
-        }
-    });
+    // 2. Create Peer (Simple Version - No Complex Config)
+    peer = new Peer(newRoomId);
     
     peer.on('open', (id) => {
         document.getElementById('room-id').textContent = id;
@@ -59,8 +53,7 @@ document.getElementById('host-btn').addEventListener('click', () => {
     });
     
     peer.on('error', (err) => {
-        console.error(err);
-        alert("Connection Error: " + err.type);
+        alert("Network Error: " + err.type);
         document.getElementById('host-btn').disabled = false;
     });
 });
@@ -68,20 +61,13 @@ document.getElementById('host-btn').addEventListener('click', () => {
 document.getElementById('join-btn').addEventListener('click', () => {
     const id = document.getElementById('join-id-input').value.trim();
     if(id) {
-        // FIREWALL FIX RE-ADDED:
-        peer = new Peer(null, {
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            }
-        });
+        // Create Peer (Simple Version)
+        peer = new Peer();
         
         peer.on('open', () => setupConnection(peer.connect(id)));
         
         peer.on('error', (err) => {
-            alert("Connection Error: " + err.type);
+            alert("Network Error: " + err.type);
         });
     }
 });
@@ -90,7 +76,7 @@ function setupConnection(connection) {
     conn = connection;
     document.getElementById('conn-status').textContent = 'Connected!';
     
-    // Start Heartbeat to keep connection alive on phones
+    // Start Heartbeat to keep phone connection alive
     startHeartbeat();
 
     conn.on('data', (data) => {
@@ -98,13 +84,12 @@ function setupConnection(connection) {
     });
 
     conn.on('close', () => {
-        // Don't alert immediately, they might be refreshing.
         if(heartbeatInterval) clearInterval(heartbeatInterval);
     });
 
-    // --- SYNC LOGIC ---
+    // --- CRASH PROOF SYNC ---
+    // If I am Host, immediately send the full game state to the new person
     if(isHost) {
-        // Wait 500ms for connection to stabilize, then sync state
         setTimeout(() => {
             sendData({
                 type: 'full_sync',
@@ -125,7 +110,7 @@ function startHeartbeat() {
         if (conn && conn.open) {
             conn.send({ type: 'ping' });
         }
-    }, 2000); // Ping every 2 seconds
+    }, 2000); // Keep-alive signal every 2 seconds
 }
 
 function showScreen(screenName) {
@@ -140,6 +125,7 @@ document.getElementById('submit-roster-btn').addEventListener('click', () => {
     const myRole = isHost ? 'home' : 'away';
 
     const playerObjs = [];
+    // Auto-generate 4 players
     for(let i = 1; i <= 4; i++) {
         playerObjs.push({ name: `${teamName} Player ${i}`, stocks: 3 });
     }
@@ -165,7 +151,7 @@ function checkRosterReady() {
     }
 }
 
-// --- 3. UI RESTORATION (Rejoin Logic) ---
+// --- 3. UI RESTORATION (Crash Proof Logic) ---
 function restoreUI() {
     updateScoreboardUI();
 
@@ -229,7 +215,6 @@ function startStageSelection() {
     crewState.phase = 'stage_select'; 
     showScreen('stage');
     
-    // Only init if starting new
     stageState.available = (crewState.matchNum === 1) ? [...STARTERS] : [...FULL_STAGE_LIST];
     stageState.bans = [];
     
@@ -412,6 +397,7 @@ function endCrewBattle(winnerName, winnerRole) {
 function handleData(data) {
     switch(data.type) {
         case 'full_sync':
+            // Client gets full update from Host to restore state
             crewState = data.crew;
             stageState = data.stage;
             restoreUI();
