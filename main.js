@@ -9,16 +9,14 @@ const FULL_STAGE_LIST = [...STARTERS, ...COUNTERPICKS];
 let peer, conn, isHost = false;
 let heartbeatInterval;
 
-// The "Master State" - This is what saves the game
 let crewState = {
     home: { name: "Home", players: [], stocks: 12, currentIdx: 0 },
     away: { name: "Away", players: [], stocks: 12, currentIdx: 0 },
     matchNum: 1,
-    phase: 'roster', // roster, dashboard, stage_select, report, gameover
+    phase: 'roster', 
     previousWinner: null 
 };
 
-// Stage Selection State
 let stageState = { available: [], bans: [], turn: '', banCount: 0, mode: '' }; 
 
 // --- DOM ELEMENTS ---
@@ -31,13 +29,11 @@ const screens = {
     gameover: document.getElementById('screen-gameover')
 };
 
-// --- 1. NETWORKING (SIMPLE STABLE VERSION) ---
+// --- 1. NETWORKING (STABLE HANDSHAKE VERSION) ---
 
 document.getElementById('host-btn').addEventListener('click', () => {
-    // 1. Generate Room ID
     const newRoomId = 'cb-' + Math.random().toString(36).substr(2, 4);
     
-    // 2. Create Peer (Simple Version - No Complex Config)
     peer = new Peer(newRoomId);
     
     peer.on('open', (id) => {
@@ -61,23 +57,28 @@ document.getElementById('host-btn').addEventListener('click', () => {
 document.getElementById('join-btn').addEventListener('click', () => {
     const id = document.getElementById('join-id-input').value.trim();
     if(id) {
-        // Create Peer (Simple Version)
         peer = new Peer();
-        
         peer.on('open', () => setupConnection(peer.connect(id)));
-        
-        peer.on('error', (err) => {
-            alert("Network Error: " + err.type);
-        });
+        peer.on('error', (err) => alert("Network Error: " + err.type));
     }
 });
 
 function setupConnection(connection) {
     conn = connection;
-    document.getElementById('conn-status').textContent = 'Connected!';
     
-    // Start Heartbeat to keep phone connection alive
-    startHeartbeat();
+    // Wait for the data channel to be fully open before doing anything
+    conn.on('open', () => {
+        document.getElementById('conn-status').textContent = 'Connected!';
+        startHeartbeat();
+
+        if (isHost) {
+            // Host does nothing yet, waits for Client to ask for data
+        } else {
+            // THE FIX: Client explicitly asks for the data when ready
+            document.getElementById('conn-status').textContent = 'Syncing Match Data...';
+            sendData({ type: 'request_sync' });
+        }
+    });
 
     conn.on('data', (data) => {
         handleData(data);
@@ -86,20 +87,6 @@ function setupConnection(connection) {
     conn.on('close', () => {
         if(heartbeatInterval) clearInterval(heartbeatInterval);
     });
-
-    // --- CRASH PROOF SYNC ---
-    // If I am Host, immediately send the full game state to the new person
-    if(isHost) {
-        setTimeout(() => {
-            sendData({
-                type: 'full_sync',
-                crew: crewState,
-                stage: stageState
-            });
-        }, 500);
-    } else {
-        document.getElementById('conn-status').textContent = 'Syncing Match Data...';
-    }
 }
 
 function sendData(data) { if(conn && conn.open) conn.send(data); }
@@ -110,7 +97,7 @@ function startHeartbeat() {
         if (conn && conn.open) {
             conn.send({ type: 'ping' });
         }
-    }, 2000); // Keep-alive signal every 2 seconds
+    }, 2000); 
 }
 
 function showScreen(screenName) {
@@ -125,7 +112,6 @@ document.getElementById('submit-roster-btn').addEventListener('click', () => {
     const myRole = isHost ? 'home' : 'away';
 
     const playerObjs = [];
-    // Auto-generate 4 players
     for(let i = 1; i <= 4; i++) {
         playerObjs.push({ name: `${teamName} Player ${i}`, stocks: 3 });
     }
@@ -136,6 +122,7 @@ document.getElementById('submit-roster-btn').addEventListener('click', () => {
     document.getElementById('submit-roster-btn').disabled = true;
     document.getElementById('roster-status').textContent = "Ready! Waiting for opponent...";
 
+    // Important: Set phase so sync works
     crewState.phase = 'roster'; 
 
     sendData({ type: 'roster_submit', role: myRole, name: teamName, players: playerObjs });
@@ -151,12 +138,19 @@ function checkRosterReady() {
     }
 }
 
-// --- 3. UI RESTORATION (Crash Proof Logic) ---
+// --- 3. UI RESTORATION ---
 function restoreUI() {
     updateScoreboardUI();
 
+    // Based on the phase, show the right screen
     if(crewState.phase === 'roster') {
         showScreen('roster');
+        // If I already submitted, disable my button
+        const myRole = isHost ? 'home' : 'away';
+        if(crewState[myRole].players.length > 0) {
+            document.getElementById('submit-roster-btn').disabled = true;
+            document.getElementById('roster-status').textContent = "Ready! Waiting for opponent...";
+        }
     } 
     else if(crewState.phase === 'dashboard') {
         showScreen('scoreboard');
@@ -396,26 +390,36 @@ function endCrewBattle(winnerName, winnerRole) {
 
 function handleData(data) {
     switch(data.type) {
+        case 'request_sync':
+            // Host receives request, sends full state back
+            sendData({ type: 'full_sync', crew: crewState, stage: stageState });
+            break;
+            
         case 'full_sync':
-            // Client gets full update from Host to restore state
+            // Client receives full state
             crewState = data.crew;
             stageState = data.stage;
             restoreUI();
             break;
+            
         case 'roster_submit':
             crewState[data.role].name = data.name;
             crewState[data.role].players = data.players;
             checkRosterReady();
             break;
+            
         case 'start_stage_select':
             startStageSelection();
             break;
+            
         case 'stage_click':
             processStageLogic(data.stage);
             break;
+            
         case 'game_result':
             applyGameResult(data.winner, data.stocks);
             break;
+            
         case 'ping':
             break;
     }
