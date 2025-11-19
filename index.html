@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSBU Crew Battle Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="peerjs.min.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <h1>SSBU Crew Battle</h1>
+        
+        <!-- 1. CONNECTION SCREEN -->
+        <div id="screen-connection">
+            <h2>1. Connect Teams</h2>
+            <div id="host-controls">
+                <button id="host-btn" class="btn-full">Create Room (Home Team)</button>
+                <p>Room ID: <strong id="room-id">...</strong></p>
+            </div>
+            <div id="client-controls">
+                <p>Enter Room ID:</p>
+                <input type="text" id="join-id-input" placeholder="Enter Room ID">
+                <button id="join-btn" class="btn-full">Join Room (Away Team)</button>
+            </div>
+            <p id="conn-status">Waiting...</p>
+        </div>
+
+        <!-- 2. ROSTER SETUP SCREEN -->
+        <div id="screen-roster" class="hidden">
+            <h2>2. Team Roster</h2>
+            <p>Enter the 4 Players in order.</p>
+            
+            <div class="input-group">
+                <label>Team Name:</label>
+                <input type="text" id="my-team-name" placeholder="e.g. Tigers Esports">
+            </div>
+
+            <div class="roster-inputs">
+                <input type="text" id="p1-name" placeholder="Player 1 (Starter)" class="player-input">
+                <input type="text" id="p2-name" placeholder="Player 2" class="player-input">
+                <input type="text" id="p3-name" placeholder="Player 3" class="player-input">
+                <input type="text" id="p4-name" placeholder="Player 4 (Anchor)" class="player-input">
+            </div>
+
+            <button id="submit-roster-btn" class="btn-full">Lock In Roster</button>
+            <p id="roster-status">Waiting for opponent...</p>
+        </div>
+
+        <!-- 3. SCOREBOARD (The Main Dashboard) -->
+        <div id="screen-scoreboard" class="hidden">
+            <div class="score-header">
+                <div class="team-score-box" id="home-score-box">
+                    <h3 id="disp-home-name">Home</h3>
+                    <div class="big-score" id="score-home">12</div>
+                    <small>Stocks</small>
+                </div>
+                <div class="vs-badge">VS</div>
+                <div class="team-score-box" id="away-score-box">
+                    <h3 id="disp-away-name">Away</h3>
+                    <div class="big-score" id="score-away">12</div>
+                    <small>Stocks</small>
+                </div>
+            </div>
+
+            <!-- Current Matchup Display -->
+            <div class="matchup-display">
+                <div class="active-player home">
+                    <span id="current-home-player">P1</span>
+                    <div class="stock-dots" id="stocks-home">●●●</div>
+                </div>
+                <div class="active-player away">
+                    <span id="current-away-player">P1</span>
+                    <div class="stock-dots" id="stocks-away">●●●</div>
+                </div>
+            </div>
+
+            <hr>
+            
+            <!-- Action Area -->
+            <div id="scoreboard-actions">
+                <p id="action-text">Ready for Stage Selection?</p>
+                <button id="start-stage-select-btn" class="btn-full">Select Stage</button>
+            </div>
+        </div>
+
+        <!-- 4. STAGE SELECTION (Embedded) -->
+        <div id="screen-stage-select" class="hidden">
+            <h2 id="stage-phase-title">Stage Selection</h2>
+            <p id="instructions">...</p>
+            
+            <div class="stage-list-container">
+                <h3>Starters</h3>
+                <div id="starter-list" class="stage-list"></div>
+            </div>
+            <div class="stage-list-container">
+                <h3>Counterpicks</h3>
+                <div id="counterpick-list" class="stage-list"></div>
+            </div>
+        </div>
+
+        <!-- 5. RESULT REPORTING -->
+        <div id="screen-report" class="hidden">
+            <h2>Report Match Result</h2>
+            <p class="highlight-text">Playing on: <span id="report-stage-name">...</span></p>
+            <p>Who won this game?</p>
+            
+            <div class="report-buttons">
+                <button id="btn-home-won" class="btn-full">Home Team Won</button>
+                <button id="btn-away-won" class="btn-full">Away Team Won</button>
+            </div>
+
+            <div id="stock-count-selector" class="hidden">
+                <p>How many stocks did the winner have left?</p>
+                <div class="stock-btns">
+                    <button onclick="reportConfirm(1)">1</button>
+                    <button onclick="reportConfirm(2)">2</button>
+                    <button onclick="reportConfirm(3)">3</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. GAME OVER -->
+        <div id="screen-gameover" class="hidden">
+            <h1>CREW BATTLE OVER</h1>
+            <h2 id="winner-banner">TEAM WINS!</h2>
+            <button onclick="location.reload()" class="btn-full">New Match</button>
+        </div>
+
+    </div>
+    <script src="main.js"></script>
+</body>
+</html>
