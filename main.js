@@ -31,11 +31,20 @@ const screens = {
     gameover: document.getElementById('screen-gameover')
 };
 
-// --- 1. NETWORKING ---
+// --- 1. NETWORKING (WITH FIREWALL FIX) ---
 
 document.getElementById('host-btn').addEventListener('click', () => {
     const newRoomId = 'cb-' + Math.random().toString(36).substr(2, 4);
-    peer = new Peer(newRoomId);
+    
+    // FIREWALL FIX RE-ADDED:
+    peer = new Peer(newRoomId, {
+        config: {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        }
+    });
     
     peer.on('open', (id) => {
         document.getElementById('room-id').textContent = id;
@@ -48,13 +57,32 @@ document.getElementById('host-btn').addEventListener('click', () => {
     peer.on('connection', (connection) => {
         setupConnection(connection);
     });
+    
+    peer.on('error', (err) => {
+        console.error(err);
+        alert("Connection Error: " + err.type);
+        document.getElementById('host-btn').disabled = false;
+    });
 });
 
 document.getElementById('join-btn').addEventListener('click', () => {
     const id = document.getElementById('join-id-input').value.trim();
     if(id) {
-        peer = new Peer();
+        // FIREWALL FIX RE-ADDED:
+        peer = new Peer(null, {
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        });
+        
         peer.on('open', () => setupConnection(peer.connect(id)));
+        
+        peer.on('error', (err) => {
+            alert("Connection Error: " + err.type);
+        });
     }
 });
 
@@ -71,15 +99,12 @@ function setupConnection(connection) {
 
     conn.on('close', () => {
         // Don't alert immediately, they might be refreshing.
-        // Just stop the heartbeat.
-        clearInterval(heartbeatInterval);
+        if(heartbeatInterval) clearInterval(heartbeatInterval);
     });
 
-    // --- THE CRASH FIX ---
-    // If I am the Host, and someone connects (or reconnects),
-    // I immediately send them the entire state of the world.
+    // --- SYNC LOGIC ---
     if(isHost) {
-        // Wait 500ms for connection to stabilize, then sync
+        // Wait 500ms for connection to stabilize, then sync state
         setTimeout(() => {
             sendData({
                 type: 'full_sync',
@@ -88,7 +113,6 @@ function setupConnection(connection) {
             });
         }, 500);
     } else {
-        // If I am the client, I wait for the sync.
         document.getElementById('conn-status').textContent = 'Syncing Match Data...';
     }
 }
@@ -126,7 +150,6 @@ document.getElementById('submit-roster-btn').addEventListener('click', () => {
     document.getElementById('submit-roster-btn').disabled = true;
     document.getElementById('roster-status').textContent = "Ready! Waiting for opponent...";
 
-    // Update my local view
     crewState.phase = 'roster'; 
 
     sendData({ type: 'roster_submit', role: myRole, name: teamName, players: playerObjs });
@@ -135,8 +158,6 @@ document.getElementById('submit-roster-btn').addEventListener('click', () => {
 
 function checkRosterReady() {
     if(crewState.home.players.length > 0 && crewState.away.players.length > 0) {
-        // Only move to scoreboard if we are still in roster phase
-        // (Prevents resetting if we reconnect later)
         if(crewState.phase === 'roster') {
             crewState.phase = 'dashboard';
         }
@@ -146,10 +167,8 @@ function checkRosterReady() {
 
 // --- 3. UI RESTORATION (Rejoin Logic) ---
 function restoreUI() {
-    // 1. Update Names/Stocks everywhere
     updateScoreboardUI();
 
-    // 2. Show correct screen based on phase
     if(crewState.phase === 'roster') {
         showScreen('roster');
     } 
@@ -158,12 +177,13 @@ function restoreUI() {
     } 
     else if(crewState.phase === 'stage_select') {
         showScreen('stage');
-        // Re-render stage buttons with correct history
         renderStages();
         updateStageInstructions();
     } 
+    else if(crewState.phase === 'report') {
+        showScreen('report');
+    }
     else if(crewState.phase === 'gameover') {
-        // Re-trigger game over screen
         let winner = (crewState.home.stocks > 0) ? "HOME TEAM" : "AWAY TEAM";
         let role = (crewState.home.stocks > 0) ? 'home' : 'away';
         endCrewBattle(winner, role);
@@ -206,13 +226,10 @@ document.getElementById('start-stage-select-btn').addEventListener('click', () =
 // --- 5. STAGE SELECTION LOGIC ---
 
 function startStageSelection() {
-    crewState.phase = 'stage_select'; // Update Phase
+    crewState.phase = 'stage_select'; 
     showScreen('stage');
     
-    // Only initialize if not already set (prevents wiping data on reconnect)
-    // But we need to reset if it's a NEW round.
-    // Logic: We simply overwrite stageState here because 'startStageSelection' is only called manually by Host.
-    
+    // Only init if starting new
     stageState.available = (crewState.matchNum === 1) ? [...STARTERS] : [...FULL_STAGE_LIST];
     stageState.bans = [];
     
@@ -278,7 +295,6 @@ function updateStageInstructions() {
 }
 
 function handleStageClick(stage) {
-    // Only process if it's my turn
     const myRole = isHost ? 'home' : 'away';
     if(myRole !== stageState.turn) return;
 
@@ -287,7 +303,6 @@ function handleStageClick(stage) {
 }
 
 function processStageLogic(stage) {
-    // GAME 1 LOGIC
     if(stageState.mode === 'game1') {
         const rem = stageState.available.length;
         
@@ -304,7 +319,6 @@ function processStageLogic(stage) {
         else if(newRem === 3) stageState.turn = 'away';
         else if(newRem === 2) stageState.turn = 'home'; 
     } 
-    // SUBSEQUENT LOGIC
     else {
         if(stageState.banCount < 3) {
             stageState.bans.push(stage);
@@ -326,7 +340,7 @@ function processStageLogic(stage) {
 
 function confirmStage(stage) {
     document.getElementById('report-stage-name').textContent = stage;
-    // Don't change phase variable yet, only change screen
+    crewState.phase = 'report';
     showScreen('report');
     document.getElementById('stock-count-selector').classList.add('hidden');
     document.querySelectorAll('.report-buttons button').forEach(b => b.classList.remove('hidden'));
@@ -354,19 +368,16 @@ function applyGameResult(winnerRole, winnerStocks) {
     crewState.previousWinner = winnerRole;
     const loserRole = (winnerRole === 'home') ? 'away' : 'home';
 
-    // Handle Loser
     const loserP = crewState[loserRole].players[crewState[loserRole].currentIdx];
     crewState[loserRole].stocks -= loserP.stocks; 
     loserP.stocks = 0;
     crewState[loserRole].currentIdx++; 
 
-    // Handle Winner
     const winnerP = crewState[winnerRole].players[crewState[winnerRole].currentIdx];
     const stockDiff = winnerP.stocks - winnerStocks; 
     crewState[winnerRole].stocks -= stockDiff;
     winnerP.stocks = winnerStocks; 
 
-    // Check Win Condition
     if(crewState.home.stocks <= 0) {
         crewState.phase = 'gameover';
         endCrewBattle("AWAY TEAM", 'away');
@@ -376,9 +387,7 @@ function applyGameResult(winnerRole, winnerStocks) {
     } else {
         crewState.matchNum++;
         crewState.phase = 'dashboard';
-        updateScoreboardUI();
-        showScreen('scoreboard');
-        document.getElementById('action-text').textContent = "Previous game recorded. Ready for next stage?";
+        restoreUI();
     }
 }
 
@@ -403,16 +412,25 @@ function endCrewBattle(winnerName, winnerRole) {
 function handleData(data) {
     switch(data.type) {
         case 'full_sync':
-            // CLIENT RECEIVES FULL STATE FROM HOST
             crewState = data.crew;
             stageState = data.stage;
             restoreUI();
             break;
-            
         case 'roster_submit':
             crewState[data.role].name = data.name;
             crewState[data.role].players = data.players;
             checkRosterReady();
             break;
-            
         case 'start_stage_select':
+            startStageSelection();
+            break;
+        case 'stage_click':
+            processStageLogic(data.stage);
+            break;
+        case 'game_result':
+            applyGameResult(data.winner, data.stocks);
+            break;
+        case 'ping':
+            break;
+    }
+}
