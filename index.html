@@ -12,7 +12,6 @@
     <div class="container">
         <h1>SSBU Crew Battle</h1>
         
-        <!-- 1. CONNECTION SCREEN -->
         <div id="screen-connection">
             <h2>1. Connect Teams</h2>
             <div id="host-controls">
@@ -27,44 +26,34 @@
             <p id="conn-status">Waiting...</p>
         </div>
 
-        <!-- 2. ROSTER SETUP SCREEN -->
         <div id="screen-roster" class="hidden">
-            <h2>2. Team Roster</h2>
-            <p>Enter the 4 Players in order.</p>
+            <h2>2. Team Setup</h2>
+            <p>Enter your Team Name.</p>
+            <p class="small-text">Players (P1-P4) are generated automatically.</p>
             
             <div class="input-group">
-                <label>Team Name:</label>
                 <input type="text" id="my-team-name" placeholder="e.g. Tigers Esports">
             </div>
 
-            <div class="roster-inputs">
-                <input type="text" id="p1-name" placeholder="Player 1 (Starter)" class="player-input">
-                <input type="text" id="p2-name" placeholder="Player 2" class="player-input">
-                <input type="text" id="p3-name" placeholder="Player 3" class="player-input">
-                <input type="text" id="p4-name" placeholder="Player 4 (Anchor)" class="player-input">
-            </div>
-
-            <button id="submit-roster-btn" class="btn-full">Lock In Roster</button>
+            <button id="submit-roster-btn" class="btn-full">Ready Up</button>
             <p id="roster-status">Waiting for opponent...</p>
         </div>
 
-        <!-- 3. SCOREBOARD (The Main Dashboard) -->
         <div id="screen-scoreboard" class="hidden">
             <div class="score-header">
                 <div class="team-score-box" id="home-score-box">
                     <h3 id="disp-home-name">Home</h3>
                     <div class="big-score" id="score-home">12</div>
-                    <small>Stocks</small>
+                    <small>Stocks Left</small>
                 </div>
                 <div class="vs-badge">VS</div>
                 <div class="team-score-box" id="away-score-box">
                     <h3 id="disp-away-name">Away</h3>
                     <div class="big-score" id="score-away">12</div>
-                    <small>Stocks</small>
+                    <small>Stocks Left</small>
                 </div>
             </div>
 
-            <!-- Current Matchup Display -->
             <div class="matchup-display">
                 <div class="active-player home">
                     <span id="current-home-player">P1</span>
@@ -78,14 +67,12 @@
 
             <hr>
             
-            <!-- Action Area -->
             <div id="scoreboard-actions">
                 <p id="action-text">Ready for Stage Selection?</p>
                 <button id="start-stage-select-btn" class="btn-full">Select Stage</button>
             </div>
         </div>
 
-        <!-- 4. STAGE SELECTION (Embedded) -->
         <div id="screen-stage-select" class="hidden">
             <h2 id="stage-phase-title">Stage Selection</h2>
             <p id="instructions">...</p>
@@ -100,7 +87,6 @@
             </div>
         </div>
 
-        <!-- 5. RESULT REPORTING -->
         <div id="screen-report" class="hidden">
             <h2>Report Match Result</h2>
             <p class="highlight-text">Playing on: <span id="report-stage-name">...</span></p>
@@ -121,10 +107,15 @@
             </div>
         </div>
 
-        <!-- 6. GAME OVER -->
         <div id="screen-gameover" class="hidden">
-            <h1>CREW BATTLE OVER</h1>
+            <h1>MATCH COMPLETE</h1>
             <h2 id="winner-banner">TEAM WINS!</h2>
+            
+            <div class="final-score-box">
+                <p>Final Score (Stocks Taken)</p>
+                <div id="final-score-display" class="big-score">12 - 11</div>
+            </div>
+
             <button onclick="location.reload()" class="btn-full">New Match</button>
         </div>
 
