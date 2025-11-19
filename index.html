@@ -7,128 +7,173 @@
     <link rel="stylesheet" href="style.css">
     <script src="peerjs.min.js"></script>
 </head>
+
 <body>
 
-    <div class="container">
-        <h1>SSBU Crew Battle</h1>
-        
-        <div id="screen-connection">
-            <h2>1. Connect Teams</h2>
-            
-            <div id="host-section">
-                <button id="host-btn" class="btn-full">Create Room (Home Team)</button>
-                <div id="host-info" class="hidden">
-                    <p>Room ID:</p>
-                    <div class="room-code-display"><strong id="room-id">Generating...</strong></div>
-                    <p class="small-text">Share this code with the Away Team</p>
-                </div>
-            </div>
+<div class="app-container">
 
-            <div id="join-section">
-                <hr>
-                <p><strong>OR</strong></p>
-                <input type="text" id="join-id-input" placeholder="Enter Room ID here">
-                <button id="join-btn" class="btn-full">Join Room (Away Team)</button>
-            </div>
-
-            <p id="conn-status" class="status-bar">Ready to connect.</p>
-        </div>
-
-        <div id="screen-roster" class="hidden">
-            <h2>2. Team Setup</h2>
-            <p>Enter your Team Name.</p>
-            
-            <div class="input-group">
-                <input type="text" id="my-team-name" placeholder="e.g. Tigers Esports">
-            </div>
-            <p class="small-text">Players P1-P4 are generated automatically.</p>
-
-            <button id="submit-roster-btn" class="btn-full">Ready Up</button>
-            <p id="roster-status" class="status-bar">Waiting for opponent...</p>
-        </div>
-
-        <div id="screen-scoreboard" class="hidden">
-            <div class="score-header">
-                <div class="team-score-box" id="home-score-box">
-                    <h3 id="disp-home-name">Home</h3>
-                    <div class="big-score" id="score-home">12</div>
-                    <small>Stocks Left</small>
-                </div>
-                <div class="vs-badge">VS</div>
-                <div class="team-score-box" id="away-score-box">
-                    <h3 id="disp-away-name">Away</h3>
-                    <div class="big-score" id="score-away">12</div>
-                    <small>Stocks Left</small>
-                </div>
-            </div>
-
-            <div class="matchup-display">
-                <div class="active-player home">
-                    <span id="current-home-player">P1</span>
-                    <div class="stock-dots" id="stocks-home">●●●</div>
-                </div>
-                <div class="active-player away">
-                    <span id="current-away-player">P1</span>
-                    <div class="stock-dots" id="stocks-away">●●●</div>
-                </div>
-            </div>
-
-            <hr>
-            
-            <div id="scoreboard-actions">
-                <p id="action-text">Ready for Stage Selection?</p>
-                <button id="start-stage-select-btn" class="btn-full">Select Stage</button>
-            </div>
-        </div>
-
-        <div id="screen-stage-select" class="hidden">
-            <h2 id="stage-phase-title">Stage Selection</h2>
-            <p id="instructions" class="highlight-text">...</p>
-            
-            <div class="stage-list-container">
-                <h3>Starters</h3>
-                <div id="starter-list" class="stage-list"></div>
-            </div>
-            <div class="stage-list-container">
-                <h3>Counterpicks</h3>
-                <div id="counterpick-list" class="stage-list"></div>
-            </div>
-        </div>
-
-        <div id="screen-report" class="hidden">
-            <h2>Report Match Result</h2>
-            <p>Playing on: <strong id="report-stage-name">...</strong></p>
-            <hr>
-            <p>Who won this game?</p>
-            
-            <div class="report-buttons">
-                <button id="btn-home-won" class="btn-full">Home Team Won</button>
-                <button id="btn-away-won" class="btn-full">Away Team Won</button>
-            </div>
-
-            <div id="stock-count-selector" class="hidden">
-                <p>How many stocks did the winner have left?</p>
-                <div class="stock-btns">
-                    <button onclick="reportConfirm(1)">1</button>
-                    <button onclick="reportConfirm(2)">2</button>
-                    <button onclick="reportConfirm(3)">3</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="screen-gameover" class="hidden">
-            <h1>MATCH COMPLETE</h1>
-            <h2 id="winner-banner">TEAM WINS!</h2>
-            
-            <div class="final-score-box">
-                <p>Final Score (Stocks Taken)</p>
-                <div id="final-score-display" class="big-score">12 - 11</div>
-            </div>
-
-            <button onclick="location.reload()" class="btn-full">New Match</button>
-        </div>
-
+    <!-- ====================== STATUS / ERROR BAR ====================== -->
+    <div id="global-status" class="status-bar" aria-live="polite">
+        Ready to connect.
     </div>
-    <script src="main.js"></script>
+
+    <!-- ====================== SCREEN: CONNECTION ====================== -->
+    <section class="screen active" data-screen="connection">
+
+        <h1 class="app-title">SSBU Crew Battle</h1>
+        <h2 class="screen-subtitle">1. Connect Teams</h2>
+
+        <!-- Host Create Room -->
+        <div class="module">
+            <button id="host-btn" class="btn-full" type="button">Create Room (Home)</button>
+
+            <div id="host-info" class="hide">
+                <p class="label">Room ID:</p>
+                <div class="room-display">
+                    <strong id="room-id">Generating…</strong>
+                </div>
+                <p class="info-text">Share this code with the Away Team</p>
+            </div>
+        </div>
+
+        <!-- Join Room -->
+        <div class="module">
+            <hr class="divider">
+            <p class="center">OR</p>
+
+            <input id="join-id-input" type="text" placeholder="Enter Room ID" autocomplete="off">
+
+            <button id="join-btn" class="btn-full" type="button">Join Room (Away)</button>
+        </div>
+
+    </section>
+
+
+    <!-- ====================== SCREEN: TEAM SETUP ====================== -->
+    <section class="screen hide" data-screen="roster">
+
+        <h2 class="screen-subtitle">2. Team Setup</h2>
+
+        <p>Enter your Team Name:</p>
+
+        <div class="input-group">
+            <input id="my-team-name" type="text" placeholder="e.g. Tigers Esports">
+        </div>
+
+        <p class="info-text">Players P1–P4 are generated automatically.</p>
+
+        <button id="submit-roster-btn" class="btn-full" type="button">Ready Up</button>
+
+        <p id="roster-status" class="status-bar">Waiting for opponent…</p>
+
+    </section>
+
+
+    <!-- ====================== SCREEN: SCOREBOARD ====================== -->
+    <section class="screen hide" data-screen="scoreboard">
+
+        <div class="scoreboard-header">
+
+            <div class="team-box" data-team="home">
+                <h3 id="disp-home-name">Home</h3>
+                <div class="big-score" id="score-home">12</div>
+                <small>Stocks Left</small>
+            </div>
+
+            <div class="vs-badge">VS</div>
+
+            <div class="team-box" data-team="away">
+                <h3 id="disp-away-name">Away</h3>
+                <div class="big-score" id="score-away">12</div>
+                <small>Stocks Left</small>
+            </div>
+
+        </div>
+
+        <div class="matchup-panel">
+            <div class="active-player" data-team="home">
+                <span id="current-home-player" class="player-name">P1</span>
+                <div id="stocks-home" class="stock-dots"></div>
+            </div>
+
+            <div class="active-player" data-team="away">
+                <span id="current-away-player" class="player-name">P1</span>
+                <div id="stocks-away" class="stock-dots"></div>
+            </div>
+        </div>
+
+        <div class="action-panel">
+            <p id="action-text" class="center">Ready for Stage Selection?</p>
+            <button id="start-stage-select-btn" class="btn-full" type="button">Select Stage</button>
+        </div>
+
+    </section>
+
+
+    <!-- ====================== SCREEN: STAGE SELECT ====================== -->
+    <section class="screen hide" data-screen="stage-select">
+
+        <h2 id="stage-phase-title" class="screen-subtitle">Stage Selection</h2>
+        <p id="instructions" class="highlight-text"></p>
+
+        <div class="stage-section">
+            <h3>Starters</h3>
+            <div id="starter-list" class="stage-list"></div>
+        </div>
+
+        <div class="stage-section">
+            <h3>Counterpicks</h3>
+            <div id="counterpick-list" class="stage-list"></div>
+        </div>
+
+    </section>
+
+
+    <!-- ====================== SCREEN: REPORT RESULT ====================== -->
+    <section class="screen hide" data-screen="report">
+
+        <h2 class="screen-subtitle">Report Match Result</h2>
+
+        <p>Playing on: <strong id="report-stage-name">...</strong></p>
+        <hr>
+
+        <p>Who won this game?</p>
+
+        <div class="report-buttons">
+            <button id="btn-home-won" class="btn-full" type="button">Home Team Won</button>
+            <button id="btn-away-won" class="btn-full" type="button">Away Team Won</button>
+        </div>
+
+        <div id="stock-count-selector" class="hide">
+            <p>How many stocks did the winner have left?</p>
+            <div class="stock-number-buttons">
+                <button data-stocks="1" type="button">1</button>
+                <button data-stocks="2" type="button">2</button>
+                <button data-stocks="3" type="button">3</button>
+            </div>
+        </div>
+
+    </section>
+
+
+    <!-- ====================== SCREEN: GAME OVER ====================== -->
+    <section class="screen hide" data-screen="gameover">
+
+        <h1 class="center">MATCH COMPLETE</h1>
+        <h2 id="winner-banner" class="center">TEAM WINS!</h2>
+
+        <div class="final-score-box center">
+            <p>Final Score (Stocks Taken)</p>
+            <div id="final-score-display" class="big-score">12 – 11</div>
+        </div>
+
+        <button id="new-match-btn" class="btn-full" type="button">New Match</button>
+
+    </section>
+
+</div>
+
+<script src="main.js"></script>
+
 </body>
 </html>
