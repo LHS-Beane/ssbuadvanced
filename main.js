@@ -7,11 +7,14 @@ const FULL_STAGE_LIST = [...STARTERS, ...COUNTERPICKS];
 
 // --- GLOBAL STATE ---
 let peer, conn, isHost = false;
+let heartbeatInterval;
+
+// The "Master State" 
 let crewState = {
     home: { name: "Home", players: [], stocks: 12, currentIdx: 0 },
     away: { name: "Away", players: [], stocks: 12, currentIdx: 0 },
     matchNum: 1,
-    phase: 'roster', 
+    phase: 'roster', // roster, dashboard, stage_select, report, gameover
     previousWinner: null 
 };
 
@@ -33,6 +36,7 @@ const screens = {
 document.getElementById('host-btn').addEventListener('click', () => {
     const newRoomId = 'cb-' + Math.random().toString(36).substr(2, 4);
     peer = new Peer(newRoomId);
+    
     peer.on('open', (id) => {
         document.getElementById('room-id').textContent = id;
         document.getElementById('host-btn').disabled = true;
@@ -40,7 +44,10 @@ document.getElementById('host-btn').addEventListener('click', () => {
         document.getElementById('conn-status').textContent = 'Waiting for Away Team...';
         isHost = true;
     });
-    peer.on('connection', setupConnection);
+
+    peer.on('connection', (connection) => {
+        setupConnection(connection);
+    });
 });
 
 document.getElementById('join-btn').addEventListener('click', () => {
@@ -54,47 +61,73 @@ document.getElementById('join-btn').addEventListener('click', () => {
 function setupConnection(connection) {
     conn = connection;
     document.getElementById('conn-status').textContent = 'Connected!';
-    showScreen('roster');
     
+    // Start Heartbeat to keep connection alive on phones
+    startHeartbeat();
+
     conn.on('data', (data) => {
         handleData(data);
     });
 
-    if(isHost) sendData({ type: 'sync_request' });
+    conn.on('close', () => {
+        // Don't alert immediately, they might be refreshing.
+        // Just stop the heartbeat.
+        clearInterval(heartbeatInterval);
+    });
+
+    // --- THE CRASH FIX ---
+    // If I am the Host, and someone connects (or reconnects),
+    // I immediately send them the entire state of the world.
+    if(isHost) {
+        // Wait 500ms for connection to stabilize, then sync
+        setTimeout(() => {
+            sendData({
+                type: 'full_sync',
+                crew: crewState,
+                stage: stageState
+            });
+        }, 500);
+    } else {
+        // If I am the client, I wait for the sync.
+        document.getElementById('conn-status').textContent = 'Syncing Match Data...';
+    }
 }
 
 function sendData(data) { if(conn && conn.open) conn.send(data); }
+
+function startHeartbeat() {
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    heartbeatInterval = setInterval(() => {
+        if (conn && conn.open) {
+            conn.send({ type: 'ping' });
+        }
+    }, 2000); // Ping every 2 seconds
+}
 
 function showScreen(screenName) {
     Object.values(screens).forEach(s => s.classList.add('hidden'));
     screens[screenName].classList.remove('hidden');
 }
 
-// --- 2. ROSTER LOGIC (AUTO-GENERATED NAMES) ---
+// --- 2. ROSTER LOGIC ---
 
 document.getElementById('submit-roster-btn').addEventListener('click', () => {
-    // Get Team Name
     const teamName = document.getElementById('my-team-name').value || (isHost ? "Home Team" : "Away Team");
-    
-    // Determine Role
     const myRole = isHost ? 'home' : 'away';
 
-    // Automatically generate players (P1, P2, P3, P4)
-    // Format: "Home Player 1", "Away Player 2", etc.
     const playerObjs = [];
     for(let i = 1; i <= 4; i++) {
-        playerObjs.push({ 
-            name: `${teamName} Player ${i}`, 
-            stocks: 3 
-        });
+        playerObjs.push({ name: `${teamName} Player ${i}`, stocks: 3 });
     }
     
-    // Update local state
     crewState[myRole].name = teamName;
     crewState[myRole].players = playerObjs;
 
     document.getElementById('submit-roster-btn').disabled = true;
     document.getElementById('roster-status').textContent = "Ready! Waiting for opponent...";
+
+    // Update my local view
+    crewState.phase = 'roster'; 
 
     sendData({ type: 'roster_submit', role: myRole, name: teamName, players: playerObjs });
     checkRosterReady();
@@ -102,12 +135,42 @@ document.getElementById('submit-roster-btn').addEventListener('click', () => {
 
 function checkRosterReady() {
     if(crewState.home.players.length > 0 && crewState.away.players.length > 0) {
-        updateScoreboardUI();
-        showScreen('scoreboard');
+        // Only move to scoreboard if we are still in roster phase
+        // (Prevents resetting if we reconnect later)
+        if(crewState.phase === 'roster') {
+            crewState.phase = 'dashboard';
+        }
+        restoreUI(); 
     }
 }
 
-// --- 3. SCOREBOARD LOGIC ---
+// --- 3. UI RESTORATION (Rejoin Logic) ---
+function restoreUI() {
+    // 1. Update Names/Stocks everywhere
+    updateScoreboardUI();
+
+    // 2. Show correct screen based on phase
+    if(crewState.phase === 'roster') {
+        showScreen('roster');
+    } 
+    else if(crewState.phase === 'dashboard') {
+        showScreen('scoreboard');
+    } 
+    else if(crewState.phase === 'stage_select') {
+        showScreen('stage');
+        // Re-render stage buttons with correct history
+        renderStages();
+        updateStageInstructions();
+    } 
+    else if(crewState.phase === 'gameover') {
+        // Re-trigger game over screen
+        let winner = (crewState.home.stocks > 0) ? "HOME TEAM" : "AWAY TEAM";
+        let role = (crewState.home.stocks > 0) ? 'home' : 'away';
+        endCrewBattle(winner, role);
+    }
+}
+
+// --- 4. SCOREBOARD LOGIC ---
 
 function updateScoreboardUI() {
     document.getElementById('disp-home-name').textContent = crewState.home.name;
@@ -140,10 +203,16 @@ document.getElementById('start-stage-select-btn').addEventListener('click', () =
     sendData({ type: 'start_stage_select' });
 });
 
-// --- 4. STAGE SELECTION LOGIC ---
+// --- 5. STAGE SELECTION LOGIC ---
 
 function startStageSelection() {
+    crewState.phase = 'stage_select'; // Update Phase
     showScreen('stage');
+    
+    // Only initialize if not already set (prevents wiping data on reconnect)
+    // But we need to reset if it's a NEW round.
+    // Logic: We simply overwrite stageState here because 'startStageSelection' is only called manually by Host.
+    
     stageState.available = (crewState.matchNum === 1) ? [...STARTERS] : [...FULL_STAGE_LIST];
     stageState.bans = [];
     
@@ -209,12 +278,16 @@ function updateStageInstructions() {
 }
 
 function handleStageClick(stage) {
+    // Only process if it's my turn
+    const myRole = isHost ? 'home' : 'away';
+    if(myRole !== stageState.turn) return;
+
     sendData({ type: 'stage_click', stage: stage });
     processStageLogic(stage);
 }
 
 function processStageLogic(stage) {
-    // GAME 1 LOGIC (1-2-1)
+    // GAME 1 LOGIC
     if(stageState.mode === 'game1') {
         const rem = stageState.available.length;
         
@@ -253,12 +326,13 @@ function processStageLogic(stage) {
 
 function confirmStage(stage) {
     document.getElementById('report-stage-name').textContent = stage;
+    // Don't change phase variable yet, only change screen
     showScreen('report');
     document.getElementById('stock-count-selector').classList.add('hidden');
     document.querySelectorAll('.report-buttons button').forEach(b => b.classList.remove('hidden'));
 }
 
-// --- 5. RESULT REPORTING LOGIC ---
+// --- 6. REPORTING LOGIC ---
 
 let pendingWinner = '';
 
@@ -294,11 +368,14 @@ function applyGameResult(winnerRole, winnerStocks) {
 
     // Check Win Condition
     if(crewState.home.stocks <= 0) {
+        crewState.phase = 'gameover';
         endCrewBattle("AWAY TEAM", 'away');
     } else if (crewState.away.stocks <= 0) {
+        crewState.phase = 'gameover';
         endCrewBattle("HOME TEAM", 'home');
     } else {
         crewState.matchNum++;
+        crewState.phase = 'dashboard';
         updateScoreboardUI();
         showScreen('scoreboard');
         document.getElementById('action-text').textContent = "Previous game recorded. Ready for next stage?";
@@ -308,13 +385,7 @@ function applyGameResult(winnerRole, winnerStocks) {
 function endCrewBattle(winnerName, winnerRole) {
     document.getElementById('winner-banner').textContent = winnerName + " WINS!";
     
-    // CALCULATE "STOCKS TAKEN"
-    // Total stocks starts at 12.
-    // If Home wins, they took 12 Away stocks.
-    // Away took (12 - HomeRemainingStocks).
-    
     let homeTaken, awayTaken;
-    
     if (winnerRole === 'home') {
         homeTaken = 12;
         awayTaken = 12 - crewState.home.stocks;
@@ -324,27 +395,24 @@ function endCrewBattle(winnerName, winnerRole) {
     }
     
     document.getElementById('final-score-display').textContent = `${homeTaken} - ${awayTaken}`;
-    
     showScreen('gameover');
 }
 
-// --- 6. DATA HANDLING ---
+// --- 7. DATA HANDLING ---
 
 function handleData(data) {
     switch(data.type) {
+        case 'full_sync':
+            // CLIENT RECEIVES FULL STATE FROM HOST
+            crewState = data.crew;
+            stageState = data.stage;
+            restoreUI();
+            break;
+            
         case 'roster_submit':
             crewState[data.role].name = data.name;
             crewState[data.role].players = data.players;
             checkRosterReady();
             break;
+            
         case 'start_stage_select':
-            startStageSelection();
-            break;
-        case 'stage_click':
-            processStageLogic(data.stage);
-            break;
-        case 'game_result':
-            applyGameResult(data.winner, data.stocks);
-            break;
-    }
-}
