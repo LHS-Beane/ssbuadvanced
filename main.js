@@ -44,6 +44,7 @@ const $$ = s => document.querySelectorAll(s);
    SCREEN MANAGER — PATCHED
 --------------------------------------------------*/
 function showScreen(name) {
+   console.log("showScreen called with:", name);
     $$(".screen").forEach(s => s.classList.remove("active"));
     const target = $(`[data-screen="${name}"]`);
     if (!target) {
