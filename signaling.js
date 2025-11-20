@@ -7,19 +7,30 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 export class Signaling {
-    constructor() {
-        this.peer = null;
-        this.role = null;              // "host" or "guest"
-        this.roomId = null;
-        this.handlers = {
-            connected: () => {},
-            message: () => {},
-            disconnected: () => {}
-        };
+   constructor() {
+    this.peer = null;
+    this.role = null;
+    this.roomId = null;
 
-        // Firebase real-time DB
-        this.db = firebase.database();
-    }
+    this.handlers = {
+        connected: () => {},
+        message: () => {},
+        disconnected: () => {}
+    };
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDaPLXAplrJ2LR8rU4_3SEP_Jxkzhtf75E",
+        authDomain: "ssbu-6a352.firebaseapp.com",
+        databaseURL: "https://ssbu-6a352-default-rtdb.firebaseio.com",
+        projectId: "ssbu-6a352",
+        storageBucket: "ssbu-6a352.appspot.com",
+        messagingSenderId: "326500420876",
+        appId: "1:326500420876:web:f2b1e0f045a133ca628d29"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    this.db = getDatabase(app);
+}
 
     // Listen for events
     onConnected(fn)      { this.handlers.connected = fn; }
