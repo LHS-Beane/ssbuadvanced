@@ -1,93 +1,134 @@
+// signaling.js — WebRTC signaling (Firebase + SimplePeer, CSP-safe)
 
-// signaling.js — WebRTC signaling via Firebase + SimplePeer (ESM-safe)
-
-// --- Import SimplePeer (correct ESM build!!) ---
+// Import SimplePeer from esm.sh (CORS-friendly, ES module)
 import SimplePeer from "https://esm.sh/simple-peer@9.11.1";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+// You must ensure firebase-app.js and firebase-database.js are included in HTML
+// and that firebase.initializeApp(...) has already run.
 
 export class Signaling {
-   constructor() {
-    this.peer = null;
-    this.role = null;
-    this.roomId = null;
+    constructor() {
+        this.peer = null;
+        this.role = null;   // "host" or "guest"
+        this.roomId = null;
 
-    this.handlers = {
-        connected: () => {},
-        message: () => {},
-        disconnected: () => {}
-    };
+        this.handlers = {
+            connected: () => {},
+            message:   () => {},
+            disconnected: () => {}
+        };
 
-    const firebaseConfig = {
-        apiKey: "AIzaSyDaPLXAplrJ2LR8rU4_3SEP_Jxkzhtf75E",
-        authDomain: "ssbu-6a352.firebaseapp.com",
-        databaseURL: "https://ssbu-6a352-default-rtdb.firebaseio.com",
-        projectId: "ssbu-6a352",
-        storageBucket: "ssbu-6a352.appspot.com",
-        messagingSenderId: "326500420876",
-        appId: "1:326500420876:web:f2b1e0f045a133ca628d29"
-    };
+        // Firebase Database reference
+        this.db = firebase.database();
+    }
 
-    const app = initializeApp(firebaseConfig);
-    this.db = getDatabase(app);
-}
+    onConnected(fn)    { this.handlers.connected = fn; }
+    onMessage(fn)      { this.handlers.message = fn; }
+    onDisconnected(fn) { this.handlers.disconnected = fn; }
 
-    // Listen for events
-    onConnected(fn)      { this.handlers.connected = fn; }
-    onMessage(fn)        { this.handlers.message = fn; }
-    onDisconnected(fn)   { this.handlers.disconnected = fn; }
-
-    // Host creates room
+    // ------------------------------------------------------------
+    // HOST CREATES ROOM
+    // ------------------------------------------------------------
     async createRoom(roomId) {
         this.role = "host";
         this.roomId = roomId;
 
-        this.peer = new SimplePeer({ initiator: true, trickle: false });
-
-        this.peer.on("signal", (data) => {
-            this.db.ref(`rooms/${roomId}/hostSignal`).set(JSON.stringify(data));
+        this.peer = new SimplePeer({
+            initiator: true,
+            trickle: false
         });
 
-        this.peer.on("connect", () => this.handlers.connected());
-        this.peer.on("data", (d) => this.handlers.message(JSON.parse(d)));
+        // When SimplePeer generates its offer signal
+        this.peer.on("signal", (data) => {
+            this.db.ref(`rooms/${roomId}/hostSignal`)
+                .set(JSON.stringify(data));
+        });
 
-        // Listen for guest's answer
+        // WebRTC connected
+        this.peer.on("connect", () => {
+            this.handlers.connected();
+        });
+
+        // Receiving data
+        this.peer.on("data", (data) => {
+            try {
+                this.handlers.message(JSON.parse(data));
+            } catch (e) {
+                console.error("Bad JSON from peer:", e);
+            }
+        });
+
+        this.peer.on("close", () => this.handlers.disconnected());
+        this.peer.on("error", (err) => console.error("Peer error:", err));
+
+        // Listen for guest answer
         this.db.ref(`rooms/${roomId}/guestSignal`).on("value", (snap) => {
-            const v = snap.val();
-            if (v) this.peer.signal(JSON.parse(v));
+            const val = snap.val();
+            if (val) {
+                this.peer.signal(JSON.parse(val));
+            }
         });
     }
 
-    // Guest joins room
+    // ------------------------------------------------------------
+    // GUEST JOINS ROOM
+    // ------------------------------------------------------------
     async joinRoom(roomId) {
         this.role = "guest";
         this.roomId = roomId;
 
-        this.peer = new SimplePeer({ initiator: false, trickle: false });
-
-        this.peer.on("signal", (data) => {
-            this.db.ref(`rooms/${roomId}/guestSignal`).set(JSON.stringify(data));
+        this.peer = new SimplePeer({
+            initiator: false,
+            trickle: false
         });
 
-        this.peer.on("connect", () => this.handlers.connected());
-        this.peer.on("data", (d) => this.handlers.message(JSON.parse(d)));
+        // Guest sends answer signal
+        this.peer.on("signal", (data) => {
+            this.db.ref(`rooms/${roomId}/guestSignal`)
+                .set(JSON.stringify(data));
+        });
+
+        this.peer.on("connect", () => {
+            this.handlers.connected();
+        });
+
+        this.peer.on("data", (data) => {
+            try {
+                this.handlers.message(JSON.parse(data));
+            } catch (e) {
+                console.error("Bad JSON from peer:", e);
+            }
+        });
+
+        this.peer.on("close", () => this.handlers.disconnected());
+        this.peer.on("error", (err) => console.error("Peer error:", err));
 
         // Listen for host offer
         this.db.ref(`rooms/${roomId}/hostSignal`).on("value", (snap) => {
-            const v = snap.val();
-            if (v) this.peer.signal(JSON.parse(v));
+            const val = snap.val();
+            if (val) {
+                this.peer.signal(JSON.parse(val));
+            }
         });
     }
 
+    // ------------------------------------------------------------
+    // SEND MESSAGE
+    // ------------------------------------------------------------
     send(obj) {
         if (this.peer && this.peer.connected) {
             this.peer.send(JSON.stringify(obj));
         }
     }
 
+    // ------------------------------------------------------------
+    // CLOSE CONNECTION
+    // ------------------------------------------------------------
     close() {
-        try { this.peer.destroy(); } catch(e) {}
+        try {
+            this.peer.destroy();
+        } catch (e) {}
+
         this.handlers.disconnected();
     }
-    
 }
