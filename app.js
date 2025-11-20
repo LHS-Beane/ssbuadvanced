@@ -1,583 +1,463 @@
-/*************************************************************
- * SSBU CREW BATTLE – FULL LOGIC
- * Works with PeerWrapper (peer-wrapper.js)
- *************************************************************/
+// app.js — SSBU Crew Battle Manager (Option A - Refactored UI)
+// -------------------------------------------------------------
 
-const peer = new PeerWrapper();
+import { Signaling } from "./signaling.js";
 
-/*************************************************************
- * CONSTANTS
- *************************************************************/
+// ---------- DOM UTILITIES ----------
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
 
-const STARTERS = ["Battlefield", "Final Destination", "Town & City", "Pokémon Stadium 2", "Smashville"];
-const COUNTERPICKS = ["Kalos Pokémon League", "Lylat Cruise", "Small Battlefield", "Yoshi's Story", "Hollow Bastion"];
-const FULL_STAGES = [...STARTERS, ...COUNTERPICKS];
+function showScreen(name) {
+    $$(".screen").forEach((s) => s.classList.add("hide"));
+    const screen = $(`.screen[data-screen="${name}"]`);
+    if (screen) screen.classList.remove("hide");
+}
 
-const TOTAL_STOCKS = 12;
+function setStatus(msg) {
+    $("#global-status").textContent = msg;
+}
 
-/*************************************************************
- * GLOBAL GAME STATE
- *************************************************************/
+// ---------- GLOBAL STATE ----------
+let signal = null;
+let isHost = false;
+let roomId = null;
 
-let game = {
-    phase: "connection",
-    round: 1,
-    roundsWon: { home: 0, away: 0 },
-    isHost: false,
-
+let state = {
+    phase: "connection",  // connection → roster → scoreboard → stage-select → report → gameover
     home: {
         name: "Home",
         players: [],
-        firstUp: null,
-        stocksRemaining: TOTAL_STOCKS,
-        currentIdx: null
+        totalStocks: 12,
+        idx: 0
     },
-
     away: {
         name: "Away",
         players: [],
-        firstUp: null,
-        stocksRemaining: TOTAL_STOCKS,
-        currentIdx: null
+        totalStocks: 12,
+        idx: 0
     },
-
-    stage: {
-        mode: "none",
-        turn: null,
-        bans: [],
-        available: [],
-        banCount: 0,
-        chosen: null
-    },
-
-    previousWinner: null
+    matchNum: 1,
+    previousWinner: null,
+    stage: null
 };
 
-/*************************************************************
- * DOM SHORTCUTS
- *************************************************************/
+// STARTERS + COUNTERPICKS
+const STARTERS = [
+    "Battlefield",
+    "Final Destination",
+    "Town & City",
+    "Pokémon Stadium 2",
+    "Smashville"
+];
 
-const $ = sel => document.querySelector(sel);
-const $$ = sel => document.querySelectorAll(sel);
+const COUNTERPICKS = [
+    "Kalos Pokémon League",
+    "Lylat Cruise",
+    "Small Battlefield",
+    "Yoshi's Story",
+    "Hollow Bastion"
+];
 
-const screens = {
-    connection: $('[data-screen="connection"]'),
-    roster: $('[data-screen="roster"]'),
-    firstup: $('[data-screen="first-up"]'),
-    scoreboard: $('[data-screen="scoreboard"]'),
-    stage: $('[data-screen="stage-select"]'),
-    report: $('[data-screen="report"]'),
-    roundwin: $('[data-screen="round-win"]'),
-    matchwin: $('[data-screen="match-win"]')
+const ALL_STAGES = [...STARTERS, ...COUNTERPICKS];
+
+let stageFlow = {
+    mode: null,       // "strike" or "counterpick"
+    turn: null,       // "home" or "away"
+    available: [],
+    bans: [],
+    banCount: 0
 };
 
-const statusBar = $("#global-status");
-
-/*************************************************************
- * SCREEN MANAGEMENT
- *************************************************************/
-
-function showScreen(name) {
-    Object.values(screens).forEach(s => s.classList.add("hide"));
-    screens[name].classList.remove("hide");
-    screens[name].classList.add("active");
+// ---------- NETWORK SYNC ----------
+function broadcast(obj) {
+    if (signal) signal.send(obj);
 }
 
-/*************************************************************
- * CONNECTION FLOW
- *************************************************************/
+function syncAll() {
+    broadcast({ type: "full_state", state });
+}
 
-$("#host-btn").addEventListener("click", () => {
-    const id = "cb-" + Math.random().toString(36).substr(2, 4);
-    game.isHost = true;
-    peer.host(id);
-});
+// ---------- SETUP SIGNALING ----------
+async function hostCreateRoom() {
+    // generate room id
+    roomId = "cb-" + Math.random().toString(36).substring(2, 6);
+    $("#room-id").textContent = roomId;
 
-$("#join-btn").addEventListener("click", () => {
-    const id = $("#join-id-input").value.trim();
-    if (!id) return;
-    game.isHost = false;
-    peer.join(id);
-});
+    isHost = true;
+    signal = new Signaling();
 
-peer.onOpen = (id) => {
-    if (game.isHost) {
-        $("#host-btn").classList.add("hide");
-        $("#host-info").classList.remove("hide");
-        $("#room-id").textContent = id;
-        statusBar.textContent = "Waiting for Away Team…";
-    } else {
-        statusBar.textContent = "Connecting…";
+    await signal.createRoom(roomId);
+
+    setStatus("Room Created. Waiting for opponent...");
+    $("#host-info").classList.remove("hide");
+
+    bindSignalEvents();
+}
+
+async function joinRoom() {
+    roomId = $("#join-id-input").value.trim();
+    if (!roomId) return;
+
+    signal = new Signaling();
+    await signal.joinRoom(roomId);
+    isHost = false;
+
+    setStatus("Connecting to host…");
+
+    bindSignalEvents();
+}
+
+function bindSignalEvents() {
+    signal.onConnected(() => {
+        setStatus("Connected!");
+
+        if (!isHost) {
+            broadcast({ type: "request_full_state" });
+        }
+    });
+
+    signal.onMessage((msg) => {
+        handleSignal(msg);
+    });
+
+    signal.onDisconnected(() => {
+        setStatus("Disconnected. Refresh to reconnect.");
+    });
+}
+
+// ---------- HANDLE SIGNAL MESSAGES ----------
+function handleSignal(msg) {
+    switch (msg.type) {
+        case "request_full_state":
+            if (isHost) syncAll();
+            break;
+
+        case "full_state":
+            state = msg.state;
+            restoreUI();
+            break;
+
+        case "roster_submit":
+            state[msg.role].name = msg.name;
+            state[msg.role].players = msg.players;
+            checkRosterReady();
+            break;
+
+        case "start_stage_select":
+            startStageSelect();
+            break;
+
+        case "ban_stage":
+            processBan(msg.stage);
+            break;
+
+        case "select_stage":
+            finalizeStage(msg.stage);
+            break;
+
+        case "report_result":
+            applyGameResult(msg.winner, msg.stocks);
+            break;
     }
-};
+}
 
-peer.onConnected = () => {
-    statusBar.textContent = "Connected!";
-
-    setTimeout(() => {
-        showScreen("roster");
-        game.phase = "roster";
-    }, 400);
-
-    if (!game.isHost) {
-        peer.send({ type: "request-full-sync" });
-    }
-};
-
-peer.onDisconnect = () => {
-    statusBar.textContent = "Disconnected. Attempting Reconnect…";
-};
-
-peer.onError = (err) => {
-    statusBar.textContent = "Network Error: " + err.type;
-};
-
-/*************************************************************
- * ROSTER SETUP (FIXED)
- *************************************************************/
-
+// ---------- ROSTER ----------
 $("#submit-roster-btn").addEventListener("click", () => {
-    let name = $("#my-team-name").value.trim();
-    let role = game.isHost ? "home" : "away";
+    const myRole = isHost ? "home" : "away";
+    const name = $("#my-team-name").value || (isHost ? "Home Team" : "Away Team");
 
-    if (!name) name = game.isHost ? "Home Team" : "Away Team";
+    // auto-generate players P1-P4
+    let players = [];
+    for (let i = 1; i <= 4; i++) {
+        players.push({ name: `${name} Player ${i}`, stocks: 3 });
+    }
 
-    // Local update
-    game[role].name = name;
-    game[role].players = [
-        { name: `${name} P1`, stocks: 3 },
-        { name: `${name} P2`, stocks: 3 },
-        { name: `${name} P3`, stocks: 3 },
-        { name: `${name} P4`, stocks: 3 }
-    ];
+    state[myRole].name = name;
+    state[myRole].players = players;
 
     $("#submit-roster-btn").disabled = true;
     $("#roster-status").textContent = "Ready! Waiting for opponent…";
 
-    // Check my side
-    checkRosterReady();
+    broadcast({ type: "roster_submit", role: myRole, name, players });
 
-    // Send to opponent
-    peer.send({
-        type: "roster",
-        role,
-        name,
-        players: game[role].players
-    });
+    checkRosterReady();
 });
 
 function checkRosterReady() {
-    console.log("ROSTER CHECK:", {
-    home: game.home.players.length,
-    away: game.away.players.length,
-    homePlayers: game.home.players,
-    awayPlayers: game.away.players
+    if (state.home.players.length > 0 && state.away.players.length > 0) {
+        // proceed to scoreboard
+        state.phase = "scoreboard";
+        restoreUI();
+        syncAll();
+    }
+}
+
+// ---------- RESTORE UI ----------
+function restoreUI() {
+    showScreen(state.phase);
+
+    if (state.phase === "scoreboard") updateScoreboard();
+    if (state.phase === "stage-select") renderStages();
+    if (state.phase === "report") setupReportUI();
+    if (state.phase === "gameover") setupGameoverUI();
+}
+
+// ---------- SCOREBOARD ----------
+function updateScoreboard() {
+    $("#disp-home-name").textContent = state.home.name;
+    $("#disp-away-name").textContent = state.away.name;
+
+    $("#score-home").textContent = state.home.totalStocks;
+    $("#score-away").textContent = state.away.totalStocks;
+
+    const hP = state.home.players[state.home.idx];
+    const aP = state.away.players[state.away.idx];
+
+    $("#current-home-player").textContent = hP ? hP.name : "Eliminated";
+    $("#stocks-home").textContent = hP ? "●".repeat(hP.stocks) : "";
+
+    $("#current-away-player").textContent = aP ? aP.name : "Eliminated";
+    $("#stocks-away").textContent = aP ? "●".repeat(aP.stocks) : "";
+
+    if (isHost) {
+        $("#start-stage-select-btn").classList.remove("hide");
+        $("#action-text").textContent = "Start Stage Selection";
+    } else {
+        $("#start-stage-select-btn").classList.add("hide");
+        $("#action-text").textContent = "Waiting for Host...";
+    }
+}
+
+$("#start-stage-select-btn").addEventListener("click", () => {
+    broadcast({ type: "start_stage_select" });
+    startStageSelect();
 });
 
-    const homeReady = game.home.players.length === 4;
-    const awayReady = game.away.players.length === 4;
+// ---------- STAGE SELECTION ----------
+function startStageSelect() {
+    state.phase = "stage-select";
 
-    if (homeReady && awayReady) {
-        beginFirstUpSelection();
-    }
-}
-
-/*************************************************************
- * FIRST-UP SELECTION
- *************************************************************/
-
-function beginFirstUpSelection() {
-    game.phase = "firstup";
-    showScreen("firstup");
-
-    const role = game.isHost ? "home" : "away";
-    const team = game[role];
-
-    $("#firstup-instructions").textContent =
-        `${team.name}: Select your first player`;
-
-    const list = $(".firstup-list");
-    list.innerHTML = "";
-
-    team.players.forEach((p, i) => {
-        let btn = document.createElement("button");
-        btn.className = "btn-full";
-        btn.textContent = p.name;
-        btn.onclick = () => {
-            game[role].firstUp = i;
-            peer.send({ type: "firstup", role, index: i });
-            checkFirstUpReady();
-        };
-        list.appendChild(btn);
-    });
-}
-
-function checkFirstUpReady() {
-    if (game.home.firstUp !== null && game.away.firstUp !== null) {
-        startGame1();
-    }
-}
-
-/*************************************************************
- * START GAME 1 → SCOREBOARD
- *************************************************************/
-
-function startGame1() {
-    game.phase = "scoreboard";
-
-    game.home.currentIdx = game.home.firstUp;
-    game.away.currentIdx = game.away.firstUp;
-
-    updateScoreboard();
-    showScreen("scoreboard");
-}
-
-/*************************************************************
- * SCOREBOARD UPDATE
- *************************************************************/
-
-function updateScoreboard() {
-    $("#disp-home-name").textContent = game.home.name;
-    $("#disp-away-name").textContent = game.away.name;
-
-    $("#score-home").textContent = game.home.stocksRemaining;
-    $("#score-away").textContent = game.away.stocksRemaining;
-
-    const hp = game.home.players[game.home.currentIdx];
-    const ap = game.away.players[game.away.currentIdx];
-
-    $("#current-home-player").textContent = hp ? hp.name : "Eliminated";
-    $("#current-away-player").textContent = ap ? ap.name : "Eliminated";
-
-    $("#stocks-home").textContent = hp ? "●".repeat(hp.stocks) : "";
-    $("#stocks-away").textContent = ap ? "●".repeat(ap.stocks) : "";
-
-    $("#start-stage-select-btn").style.display = game.isHost ? "block" : "none";
-    $("#action-text").textContent = game.isHost ? "Start stage selection" : "Waiting for host…";
-}
-
-$("#start-stage-select-btn").onclick = () => {
-    startStageSelection();
-    peer.send({ type: "start-stage" });
-};
-
-/*************************************************************
- * STAGE SELECTION (1–2–1, then winner bans 3)
- *************************************************************/
-
-function startStageSelection() {
-    game.phase = "stage";
-    showScreen("stage");
-
-    if (game.round === 1 && game.previousWinner === null) {
-        game.stage.mode = "game1";
-        game.stage.available = [...STARTERS];
-        game.stage.turn = "home";
-        game.stage.bans = [];
-        game.stage.banCount = 0;
-
-        $("#stage-phase-title").textContent = "Game 1: 1–2–1 Stage Striking";
-
+    if (state.matchNum === 1) {
+        // Game 1 — 1–2–1 strike
+        stageFlow.mode = "strike";
+        stageFlow.turn = "home"; // home bans first
+        stageFlow.available = [...STARTERS];
+        stageFlow.bans = [];
+        stageFlow.banCount = 0;
+        $("#stage-phase-title").textContent = "Game 1: 1–2–1 Stage Strike";
     } else {
-        game.stage.mode = "game2";
-        game.stage.available = [...FULL_STAGES];
-        game.stage.turn = game.previousWinner;
-        game.stage.bans = [];
-        game.stage.banCount = 0;
-
-        $("#stage-phase-title").textContent = "Counterpick Phase";
+        // Game 2+ — winner bans 3 → loser picks
+        stageFlow.mode = "counterpick";
+        stageFlow.turn = state.previousWinner;
+        stageFlow.available = [...ALL_STAGES];
+        stageFlow.bans = [];
+        stageFlow.banCount = 0;
+        $("#stage-phase-title").textContent = "Counterpick Phase (Winner bans 3)";
     }
 
-    renderStageButtons();
-    updateStageInstructions();
+    restoreUI();
 }
 
-function renderStageButtons() {
-    $("#starter-list").innerHTML = "";
-    $("#counterpick-list").innerHTML = "";
+function renderStages() {
+    const isMyTurn = (isHost ? "home" : "away") === stageFlow.turn;
 
-    FULL_STAGES.forEach(stage => {
+    $("#instructions").textContent = isMyTurn
+        ? "Your Turn: Select a stage to ban/pick."
+        : `Waiting for ${stageFlow.turn.toUpperCase()}`;
+
+    const startList = $("#starter-list");
+    const cpList = $("#counterpick-list");
+
+    startList.innerHTML = "";
+    cpList.innerHTML = "";
+
+    for (const s of ALL_STAGES) {
+        if (!stageFlow.available.includes(s)) continue;
+
         const btn = document.createElement("button");
+        btn.textContent = s;
         btn.className = "stage-btn";
-        btn.textContent = stage;
 
-        if (game.stage.bans.includes(stage)) {
-            btn.classList.add("banned");
+        const isStarter = STARTERS.includes(s);
+
+        if (stageFlow.mode === "strike" && !isStarter) {
+            btn.disabled = true;
+        }
+
+        if (!isMyTurn) {
             btn.disabled = true;
         } else {
-            const myTurn = (game.isHost ? "home" : "away") === game.stage.turn;
-            if (myTurn) {
-                btn.classList.add("selectable");
-                btn.onclick = () => clickStage(stage);
-            } else {
-                btn.disabled = true;
-            }
+            btn.onclick = () => handleStageClick(s);
         }
 
-        if (STARTERS.includes(stage)) $("#starter-list").appendChild(btn);
-        else $("#counterpick-list").appendChild(btn);
-    });
-
-    $("#counterpick-list").parentElement.style.display =
-        game.stage.mode === "game1" ? "none" : "block";
+        if (isStarter) startList.appendChild(btn);
+        else cpList.appendChild(btn);
+    }
 }
 
-function updateStageInstructions() {
-    const myTurn = (game.isHost ? "home" : "away") === game.stage.turn;
-    const turnName = game.stage.turn === "home" ? game.home.name : game.away.name;
-
-    $("#instructions").textContent =
-        myTurn ? "Your turn: Ban/Select stage" : `Waiting for ${turnName}…`;
+function handleStageClick(stage) {
+    if (stageFlow.mode === "strike") {
+        banStrike(stage);
+    } else {
+        banCounterpick(stage);
+    }
 }
 
-function clickStage(stage) {
-    if ((game.isHost ? "home" : "away") !== game.stage.turn) return;
+// ---------- STRIKE MODE (1–2–1) ----------
+function banStrike(stage) {
+    stageFlow.bans.push(stage);
+    stageFlow.available = stageFlow.available.filter((s) => s !== stage);
 
-    peer.send({ type: "stage", stage });
+    const remaining = stageFlow.available.length;
 
-    processStageSelection(stage);
-}
-
-function processStageSelection(stage) {
-
-    /************ GAME 1 (1–2–1) ************/
-    if (game.stage.mode === "game1") {
-
-        const remaining = game.stage.available.length;
-
-        if (remaining === 2) {
-            return finalizeStage(stage);
-        }
-
-        game.stage.bans.push(stage);
-        game.stage.available = game.stage.available.filter(s => s !== stage);
-
-        const left = game.stage.available.length;
-
-        if (left === 4) game.stage.turn = "away";    // home → away
-        else if (left === 3) game.stage.turn = "away"; // away again
-        else if (left === 2) game.stage.turn = "home"; // home picks
-
-        renderStageButtons();
-        updateStageInstructions();
+    if (remaining === 1) {
+        // Final stage → selected
+        broadcast({ type: "select_stage", stage: stageFlow.available[0] });
+        finalizeStage(stageFlow.available[0]);
         return;
     }
 
-    /************ GAME 2+ (winner bans 3) ************/
-    if (game.stage.mode === "game2") {
+    // Turn logic: 5→4 (home), 4→3 (away), 3→2 (away), 2→1 (home)
+    if (remaining === 4) stageFlow.turn = "away";
+    else if (remaining === 3) stageFlow.turn = "away";
+    else if (remaining === 2) stageFlow.turn = "home";
 
-        if (game.stage.turn === game.previousWinner) {
-            game.stage.bans.push(stage);
-            game.stage.available = game.stage.available.filter(s => s !== stage);
-            game.stage.banCount++;
+    broadcast({ type: "ban_stage", stage });
+    renderStages();
+}
 
-            if (game.stage.banCount === 3) {
-                game.stage.turn = (game.previousWinner === "home") ? "away" : "home";
-            }
+// ---------- COUNTERPICK MODE ----------
+function banCounterpick(stage) {
+    // first 3 are bans by winner
+    if (stageFlow.banCount < 3) {
+        stageFlow.banCount++;
+        stageFlow.bans.push(stage);
+        stageFlow.available = stageFlow.available.filter((s) => s !== stage);
 
-            renderStageButtons();
-            updateStageInstructions();
+        if (stageFlow.banCount === 3) {
+            stageFlow.turn = state.previousWinner === "home" ? "away" : "home";
+        }
+
+        broadcast({ type: "ban_stage", stage });
+        renderStages();
+        return;
+    }
+
+    // After bans → loser chooses stage
+    broadcast({ type: "select_stage", stage });
+    finalizeStage(stage);
+}
+
+function processBan(stage) {
+    stageFlow.available = stageFlow.available.filter((s) => s !== stage);
+
+    const remaining = stageFlow.available.length;
+
+    if (stageFlow.mode === "strike") {
+        if (remaining === 1) {
+            finalizeStage(stageFlow.available[0]);
             return;
         }
 
-        return finalizeStage(stage);
+        if (remaining === 4) stageFlow.turn = "away";
+        if (remaining === 3) stageFlow.turn = "away";
+        if (remaining === 2) stageFlow.turn = "home";
+    } else {
+        stageFlow.banCount++;
+        if (stageFlow.banCount === 3) {
+            stageFlow.turn = state.previousWinner === "home" ? "away" : "home";
+        }
     }
+
+    renderStages();
 }
 
+// ---------- FINALIZE STAGE ----------
 function finalizeStage(stage) {
-    game.stage.chosen = stage;
-    $("#report-stage-name").textContent = stage;
+    state.stage = stage;
+    state.phase = "report";
 
-    peer.send({ type: "stage-final", stage });
-
-    showScreen("report");
+    restoreUI();
+    syncAll();
 }
 
-/*************************************************************
- * REPORTING RESULTS
- *************************************************************/
+// ---------- REPORT SCREEN ----------
+function setupReportUI() {
+    $("#report-stage-name").textContent = state.stage;
+    $("#stock-count-selector").classList.add("hide");
+    $$(".report-buttons button").forEach((b) => b.classList.remove("hide"));
+}
 
 let pendingWinner = null;
 
-$("#btn-home-won").onclick = () => chooseWinner("home");
-$("#btn-away-won").onclick = () => chooseWinner("away");
+$("#btn-home-won").addEventListener("click", () => onWinner("home"));
+$("#btn-away-won").addEventListener("click", () => onWinner("away"));
 
-function chooseWinner(role) {
+function onWinner(role) {
     pendingWinner = role;
-
-    $$(".report-buttons button").forEach(b => b.classList.add("hide"));
+    $$(".report-buttons button").forEach((b) => b.classList.add("hide"));
     $("#stock-count-selector").classList.remove("hide");
 }
 
-$$(".stock-number-buttons button").forEach(btn => {
-    btn.onclick = () => {
-        const stocks = Number(btn.dataset.stocks);
-        submitResult(pendingWinner, stocks);
-        peer.send({ type: "result", role: pendingWinner, stocks });
-    };
+$$(".stock-number-buttons button").forEach((b) => {
+    b.addEventListener("click", () => {
+        const stocks = parseInt(b.dataset.stocks);
+        broadcast({ type: "report_result", winner: pendingWinner, stocks });
+        applyGameResult(pendingWinner, stocks);
+    });
 });
 
-function submitResult(winnerRole, winnerStocks) {
+// ---------- APPLY GAME RESULT ----------
+function applyGameResult(winner, stocksLeft) {
+    const loser = winner === "home" ? "away" : "home";
 
-    const loser = winnerRole === "home" ? "away" : "home";
+    const winnerP = state[winner].players[state[winner].idx];
+    const loserP = state[loser].players[state[loser].idx];
 
-    // Deduct from loser
-    const loserP = game[loser].players[game[loser].currentIdx];
-    game[loser].stocksRemaining -= loserP.stocks;
+    // winner loses the difference
+    const diff = winnerP.stocks - stocksLeft;
+    state[winner].totalStocks -= diff;
+    winnerP.stocks = stocksLeft;
+
+    // loser loses all remaining stocks
+    state[loser].totalStocks -= loserP.stocks;
     loserP.stocks = 0;
-    game[loser].currentIdx++;
+    state[loser].idx++;
 
-    // Deduct SD from winner
-    const winnerP = game[winnerRole].players[game[winnerRole].currentIdx];
-    const lost = winnerP.stocks - winnerStocks;
-    winnerP.stocks = winnerStocks;
-    game[winnerRole].stocksRemaining -= lost;
+    // determine round end
+    if (state.home.totalStocks <= 0) return endRound("away");
+    if (state.away.totalStocks <= 0) return endRound("home");
 
-    game.previousWinner = winnerRole;
-
-    // Check for round winner
-    if (game.home.stocksRemaining <= 0) {
-        game.roundsWon.away++;
-        return showRoundWin("away");
-    }
-
-    if (game.away.stocksRemaining <= 0) {
-        game.roundsWon.home++;
-        return showRoundWin("home");
-    }
-
-    updateScoreboard();
-    showScreen("scoreboard");
+    // continue next game
+    state.previousWinner = winner;
+    state.matchNum++;
+    state.phase = "scoreboard";
+    restoreUI();
+    syncAll();
 }
 
-/*************************************************************
- * ROUND / MATCH WIN
- *************************************************************/
-
-function showRoundWin(role) {
-    game.phase = "roundwin";
-    $("#round-winner-banner").textContent =
-        `${game[role].name} Wins Round ${game.round}!`;
-    showScreen("roundwin");
+function endRound(winningRole) {
+    state.phase = "gameover";
+    state.roundWinner = winningRole;
+    restoreUI();
+    syncAll();
 }
 
-$("#start-next-round-btn").onclick = () => {
+// ---------- GAMEOVER UI ----------
+function setupGameoverUI() {
+    const winner = state.roundWinner === "home" ? state.home.name : state.away.name;
 
-    game.round++;
+    $("#winner-banner").textContent = winner + " WINS!";
 
-    if (game.roundsWon.home === 2 || game.roundsWon.away === 2) {
-        return showMatchWin();
-    }
+    const homeTaken = 12 - state.home.totalStocks;
+    const awayTaken = 12 - state.away.totalStocks;
 
-    // Reset for next round
-    ["home", "away"].forEach(role => {
-        game[role].stocksRemaining = TOTAL_STOCKS;
-        game[role].players.forEach(p => p.stocks = 3);
-        game[role].currentIdx = null;
-        game[role].firstUp = null;
-    });
+    $("#final-score-display").textContent = `${homeTaken} – ${awayTaken}`;
 
-    beginFirstUpSelection();
-};
-
-function showMatchWin() {
-    game.phase = "matchwin";
-
-    const winner = game.roundsWon.home === 2 ? "home" : "away";
-
-    $("#match-winner-banner").textContent =
-        `${game[winner].name} Wins the Match!`;
-
-    $("#final-series-score").textContent =
-        `${game.roundsWon.home} – ${game.roundsWon.away}`;
-
-    showScreen("matchwin");
+    $("#new-match-btn").onclick = () => location.reload();
 }
 
-$("#new-match-btn").onclick = () => location.reload();
+// ---------- CONNECTION BUTTONS ----------
+$("#host-btn").addEventListener("click", hostCreateRoom);
+$("#join-btn").addEventListener("click", joinRoom);
 
-/*************************************************************
- * NETWORK MESSAGE HANDLER
- *************************************************************/
-
-peer.onData = data => {
-    switch (data.type) {
-
-        case "request-full-sync":
-            peer.send({ type: "full-sync", game });
-            break;
-
-        case "full-sync":
-            game = data.game;
-            restoreUI();
-            break;
-
-        case "roster":
-            game[data.role].name = data.name;
-            game[data.role].players = data.players;
-            checkRosterReady();
-            break;
-
-        case "firstup":
-            game[data.role].firstUp = data.index;
-            checkFirstUpReady();
-            break;
-
-        case "start-stage":
-            startStageSelection();
-            break;
-
-        case "stage":
-            processStageSelection(data.stage);
-            break;
-
-        case "stage-final":
-            finalizeStage(data.stage);
-            break;
-
-        case "result":
-            submitResult(data.role, data.stocks);
-            break;
-
-        case "ping":
-            break;
-    }
-};
-
-/*************************************************************
- * UI RESTORE (reconnect / refresh)
- *************************************************************/
-
-function restoreUI() {
-    switch (game.phase) {
-
-        case "roster":
-            showScreen("roster");
-            break;
-
-        case "firstup":
-            beginFirstUpSelection();
-            break;
-
-        case "scoreboard":
-            updateScoreboard();
-            showScreen("scoreboard");
-            break;
-
-        case "stage":
-            startStageSelection();
-            break;
-
-        case "report":
-            showScreen("report");
-            break;
-
-        case "roundwin":
-            showScreen("roundwin");
-            break;
-
-        case "matchwin":
-            showMatchWin();
-            break;
-    }
-}
