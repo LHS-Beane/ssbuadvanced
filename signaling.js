@@ -1,7 +1,10 @@
+
 // signaling.js — WebRTC signaling via Firebase + SimplePeer (ESM-safe)
 
 // --- Import SimplePeer (correct ESM build!!) ---
 import SimplePeer from "https://esm.sh/simple-peer@9.11.1";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 export class Signaling {
     constructor() {
@@ -75,4 +78,5 @@ export class Signaling {
         try { this.peer.destroy(); } catch(e) {}
         this.handlers.disconnected();
     }
+    
 }
