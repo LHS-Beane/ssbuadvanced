@@ -2,104 +2,88 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SSBU Crew Battle Manager</title>
 
     <link rel="stylesheet" href="style.css">
 
-    <!-- No PeerJS, no eval, all CSP-safe -->
+    <!-- Firebase compat version (required for firebase.database()) -->
+    <script src="https://www.gstatic.com/firebasejs/9.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.14.0/firebase-database-compat.js"></script>
+
+    <!-- Initialize Firebase -->
+    <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDaPLXAplrJ2LR8rU4_3SEP_Jxkzhtf75E",
+      authDomain: "ssbu-6a352.firebaseapp.com",
+      databaseURL: "https://ssbu-6a352-default-rtdb.firebaseio.com",
+      projectId: "ssbu-6a352",
+      storageBucket: "ssbu-6a352.firebasestorage.app",
+      messagingSenderId: "326500420876",
+      appId: "1:326500420876:web:f2b1e0f045a133ca628d29"
+    };
+    firebase.initializeApp(firebaseConfig);
+    </script>
+
 </head>
 
 <body>
 
 <div class="app-container">
 
-    <!-- GLOBAL STATUS BAR -->
+    <!-- GLOBAL STATUS -->
     <div id="global-status" class="status-bar" aria-live="polite">
         Ready to connect.
     </div>
 
-    <!-- ============================================================
-         SCREEN 1 — CONNECTION
-    ============================================================ -->
+    <!-- SCREEN 1 — CONNECTION -->
     <section class="screen active" data-screen="connection">
-
         <h1 class="app-title">SSBU Crew Battle</h1>
         <h2 class="screen-subtitle">1. Connect Teams</h2>
 
-        <!-- HOST BLOCK -->
         <div class="module">
-            <button id="host-btn" class="btn-full" type="button">
-                Create Room (Home)
-            </button>
+            <button id="host-btn" class="btn-full" type="button">Create Room (Home)</button>
 
             <div id="host-info" class="hide">
                 <p class="label">Room ID:</p>
-
-                <div class="room-display">
-                    <strong id="room-id">Generating…</strong>
-                </div>
-
+                <div class="room-display"><strong id="room-id">Generating…</strong></div>
                 <p class="info-text">Share this code with the Away Team</p>
             </div>
         </div>
 
-        <!-- JOIN BLOCK -->
         <div class="module">
-
             <hr class="divider">
             <p class="center">OR</p>
 
-            <input id="join-id-input"
-                   type="text"
-                   placeholder="Enter Room ID"
-                   autocomplete="off">
-
-            <button id="join-btn" class="btn-full" type="button">
-                Join Room (Away)
-            </button>
-
+            <input id="join-id-input" type="text" placeholder="Enter Room ID" autocomplete="off">
+            <button id="join-btn" class="btn-full" type="button">Join Room (Away)</button>
         </div>
-
     </section>
 
-    <!-- ============================================================
-         SCREEN 2 — TEAM SETUP
-    ============================================================ -->
-    <section class="screen hide" data-screen="roster">
 
+    <!-- SCREEN 2 — TEAM SETUP -->
+    <section class="screen hide" data-screen="roster">
         <h2 class="screen-subtitle">2. Team Setup</h2>
 
         <p>Enter your Team Name:</p>
 
         <div class="input-group">
-            <input id="my-team-name"
-                   type="text"
-                   placeholder="e.g. Tigers Esports">
+            <input id="my-team-name" type="text" placeholder="e.g. Tigers Esports">
         </div>
 
-        <p class="info-text">
-            Players P1–P4 are generated automatically.
-        </p>
+        <p class="info-text">Players P1–P4 are generated automatically.</p>
 
-        <button id="submit-roster-btn" class="btn-full" type="button">
-            Ready Up
-        </button>
+        <button id="submit-roster-btn" class="btn-full">Ready Up</button>
 
-        <p id="roster-status" class="status-bar">
-            Waiting for opponent…
-        </p>
-
+        <p id="roster-status" class="status-bar">Waiting for opponent…</p>
     </section>
 
-    <!-- ============================================================
-         SCREEN 3 — SCOREBOARD
-    ============================================================ -->
+
+    <!-- SCREEN 3 — SCOREBOARD -->
     <section class="screen hide" data-screen="scoreboard">
 
         <div class="scoreboard-header">
-
             <div class="team-box" data-team="home">
                 <h3 id="disp-home-name">Home</h3>
                 <div class="big-score" id="score-home">12</div>
@@ -113,7 +97,6 @@
                 <div class="big-score" id="score-away">12</div>
                 <small>Stocks Left</small>
             </div>
-
         </div>
 
         <div class="matchup-panel">
@@ -129,25 +112,16 @@
         </div>
 
         <div class="action-panel">
-            <p id="action-text" class="center">
-                Ready for Stage Selection?
-            </p>
-
-            <button id="start-stage-select-btn" class="btn-full" type="button">
-                Select Stage
-            </button>
+            <p id="action-text" class="center">Ready for Stage Selection?</p>
+            <button id="start-stage-select-btn" class="btn-full">Select Stage</button>
         </div>
-
     </section>
 
-    <!-- ============================================================
-         SCREEN 4 — STAGE SELECT
-    ============================================================ -->
+
+    <!-- SCREEN 4 — STAGE SELECT -->
     <section class="screen hide" data-screen="stage-select">
 
-        <h2 id="stage-phase-title" class="screen-subtitle">
-            Stage Selection
-        </h2>
+        <h2 id="stage-phase-title" class="screen-subtitle">Stage Selection</h2>
 
         <p id="instructions" class="highlight-text"></p>
 
@@ -163,85 +137,55 @@
 
     </section>
 
-    <!-- ============================================================
-         SCREEN 5 — REPORT MATCH RESULT
-    ============================================================ -->
+
+    <!-- SCREEN 5 — REPORT RESULT -->
     <section class="screen hide" data-screen="report">
 
         <h2 class="screen-subtitle">Report Match Result</h2>
 
-        <p>
-            Playing on:
-            <strong id="report-stage-name">...</strong>
-        </p>
+        <p>Playing on: <strong id="report-stage-name">...</strong></p>
 
         <hr>
 
         <p>Who won this game?</p>
 
         <div class="report-buttons">
-            <button id="btn-home-won" class="btn-full" type="button">
-                Home Team Won
-            </button>
-
-            <button id="btn-away-won" class="btn-full" type="button">
-                Away Team Won
-            </button>
+            <button id="btn-home-won" class="btn-full">Home Team Won</button>
+            <button id="btn-away-won" class="btn-full">Away Team Won</button>
         </div>
 
         <div id="stock-count-selector" class="hide">
             <p>How many stocks did the winner have left?</p>
 
             <div class="stock-number-buttons">
-                <button data-stocks="1" type="button">1</button>
-                <button data-stocks="2" type="button">2</button>
-                <button data-stocks="3" type="button">3</button>
+                <button data-stocks="1">1</button>
+                <button data-stocks="2">2</button>
+                <button data-stocks="3">3</button>
             </div>
         </div>
 
     </section>
 
-    <!-- ============================================================
-         SCREEN 6 — GAME OVER
-    ============================================================ -->
+
+    <!-- SCREEN 6 — GAME OVER -->
     <section class="screen hide" data-screen="gameover">
 
         <h1 class="center">MATCH COMPLETE</h1>
-
         <h2 id="winner-banner" class="center">TEAM WINS!</h2>
 
         <div class="final-score-box center">
             <p>Final Score (Stocks Taken)</p>
-            <div id="final-score-display" class="big-score">
-                12 – 11
-            </div>
+            <div id="final-score-display" class="big-score">12 – 11</div>
         </div>
 
-        <button id="new-match-btn" class="btn-full" type="button">
-            New Match
-        </button>
-
+        <button id="new-match-btn" class="btn-full">New Match</button>
     </section>
 
 </div>
 
-<!-- ============================================================
-     JAVASCRIPT MODULES
-============================================================ -->
-<script type="module" src="app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-
-<script>
-const firebaseConfig = {
-   ...
-};
-firebase.initializeApp(firebaseConfig);
-</script>
-
+<!-- MODULE SCRIPTS -->
 <script type="module" src="signaling.js"></script>
 <script type="module" src="app.js"></script>
-
 
 </body>
 </html>
