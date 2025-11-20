@@ -8,7 +8,8 @@ import {
     push
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-import SimplePeer from "https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js";
+import SimplePeer from "https://unpkg.com/simple-peer@9.11.1/simplepeer.min.mjs";
+
 
 export class Signaling {
     constructor() {
