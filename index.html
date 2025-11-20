@@ -8,7 +8,7 @@
 
     <link rel="stylesheet" href="style.css">
 
-    <!-- Firebase compat version (required for firebase.database()) -->
+    <!-- Firebase compat version -->
     <script src="https://www.gstatic.com/firebasejs/9.14.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.14.0/firebase-database-compat.js"></script>
 
@@ -19,25 +19,22 @@
       authDomain: "ssbu-6a352.firebaseapp.com",
       databaseURL: "https://ssbu-6a352-default-rtdb.firebaseio.com",
       projectId: "ssbu-6a352",
-      storageBucket: "ssbu-6a352.firebasestorage.app",
+      storageBucket: "ssbu-6a352.appspot.com",
       messagingSenderId: "326500420876",
       appId: "1:326500420876:web:f2b1e0f045a133ca628d29"
     };
     firebase.initializeApp(firebaseConfig);
     </script>
-
 </head>
 
 <body>
 
 <div class="app-container">
 
-    <!-- GLOBAL STATUS -->
     <div id="global-status" class="status-bar" aria-live="polite">
         Ready to connect.
     </div>
 
-    <!-- SCREEN 1 — CONNECTION -->
     <section class="screen active" data-screen="connection">
         <h1 class="app-title">SSBU Crew Battle</h1>
         <h2 class="screen-subtitle">1. Connect Teams</h2>
@@ -61,8 +58,6 @@
         </div>
     </section>
 
-
-    <!-- SCREEN 2 — TEAM SETUP -->
     <section class="screen hide" data-screen="roster">
         <h2 class="screen-subtitle">2. Team Setup</h2>
 
@@ -79,19 +74,14 @@
         <p id="roster-status" class="status-bar">Waiting for opponent…</p>
     </section>
 
-
-    <!-- SCREEN 3 — SCOREBOARD -->
     <section class="screen hide" data-screen="scoreboard">
-
         <div class="scoreboard-header">
             <div class="team-box" data-team="home">
                 <h3 id="disp-home-name">Home</h3>
                 <div class="big-score" id="score-home">12</div>
                 <small>Stocks Left</small>
             </div>
-
             <div class="vs-badge">VS</div>
-
             <div class="team-box" data-team="away">
                 <h3 id="disp-away-name">Away</h3>
                 <div class="big-score" id="score-away">12</div>
@@ -104,7 +94,6 @@
                 <span id="current-home-player" class="player-name">P1</span>
                 <div id="stocks-home" class="stock-dots"></div>
             </div>
-
             <div class="active-player" data-team="away">
                 <span id="current-away-player" class="player-name">P1</span>
                 <div id="stocks-away" class="stock-dots"></div>
@@ -117,8 +106,6 @@
         </div>
     </section>
 
-
-    <!-- SCREEN 4 — STAGE SELECT -->
     <section class="screen hide" data-screen="stage-select">
 
         <h2 id="stage-phase-title" class="screen-subtitle">Stage Selection</h2>
@@ -137,14 +124,10 @@
 
     </section>
 
-
-    <!-- SCREEN 5 — REPORT RESULT -->
     <section class="screen hide" data-screen="report">
-
         <h2 class="screen-subtitle">Report Match Result</h2>
 
         <p>Playing on: <strong id="report-stage-name">...</strong></p>
-
         <hr>
 
         <p>Who won this game?</p>
@@ -166,8 +149,6 @@
 
     </section>
 
-
-    <!-- SCREEN 6 — GAME OVER -->
     <section class="screen hide" data-screen="gameover">
 
         <h1 class="center">MATCH COMPLETE</h1>
@@ -183,9 +164,9 @@
 
 </div>
 
-<!-- MODULE SCRIPTS -->
 <script type="module" src="signaling.js"></script>
 <script type="module" src="app.js"></script>
 
 </body>
 </html>
+
