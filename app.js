@@ -167,6 +167,13 @@ $("#submit-roster-btn").addEventListener("click", () => {
 });
 
 function checkRosterReady() {
+    console.log("ROSTER CHECK:", {
+    home: game.home.players.length,
+    away: game.away.players.length,
+    homePlayers: game.home.players,
+    awayPlayers: game.away.players
+});
+
     const homeReady = game.home.players.length === 4;
     const awayReady = game.away.players.length === 4;
 
