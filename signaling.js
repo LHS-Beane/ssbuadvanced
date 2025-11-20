@@ -1,7 +1,7 @@
 // signaling.js — WebRTC signaling via Firebase + SimplePeer (ESM-safe)
 
 // --- Import SimplePeer (correct ESM build!!) ---
-import SimplePeer from "https://unpkg.com/simple-peer@9.11.1/simplepeer.min.mjs";
+import SimplePeer from "https://esm.sh/simple-peer@9.11.1";
 
 export class Signaling {
     constructor() {
